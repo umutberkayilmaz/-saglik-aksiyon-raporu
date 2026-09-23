@@ -12,7 +12,7 @@ st.set_page_config(page_title="Sağlık Aksiyon Raporu", page_icon="📊", layou
 GSHEET_NAME = "Saglik_Aksiyon_Guncel"
 GSHEET_WORKSHEET = "Guncel"
 
-PLATFORM_COLS = ["Braunshop", "Trendyol", "Hepsiburada", "N11", "İdefix"]
+PLATFORM_COLS = ["Akakçe", "Braunshop", "Trendyol", "Hepsiburada", "N11", "İdefix"]
 LOWEST_SOURCE_COLS = ["Trendyol", "Hepsiburada"]  # "En Dusuk Fiyat" bu ikisinden hesaplaniyor
 
 st.markdown("""
@@ -90,7 +90,7 @@ def load_data():
 
         update_text = ""
         try:
-            update_text = ws.acell("L1").value or ""
+            update_text = ws.acell("N1").value or ""
         except Exception:
             pass
 
@@ -168,7 +168,7 @@ else:
     if secilen_grup:
         filtered = filtered[filtered["Alt Grup"].isin(secilen_grup)]
 
-    st.caption(f"{len(filtered)} ürün gösteriliyor ({len(df)} toplam) — 🏆 rozeti Trendyol/Hepsiburada arasındaki en düşük fiyatı gösterir")
+    st.caption(f"{len(filtered)} ürün gösteriliyor ({len(df)} toplam) — 🏆 = Trendyol/Hepsiburada arasındaki en düşük fiyat · Akakçe sütunu piyasadaki en ucuz fiyatı ve satıcısını gösterir")
 
     # ================= TABLO OLUŞTURMA =================
     display_rows = []
@@ -191,20 +191,29 @@ else:
                 and abs(price - en_dusuk) < 0.01
             )
             row_html[col] = price_pill(price, link, ref, is_lowest)
+            if col == "Akakçe":
+                satici = r.get("Akakçe Satıcı", "")
+                row_html["Akakçe Satıcı"] = satici if satici else "-"
         display_rows.append(row_html)
 
     display_df = pd.DataFrame(display_rows)
-    show_cols = [c for c in ["Ürün Adı", "Ürün Kodu", "Alt Grup", "Hedef Fiyat"] + PLATFORM_COLS if c in display_df.columns]
+    table_order = ["Ürün Adı", "Ürün Kodu", "Alt Grup", "Hedef Fiyat", "Akakçe", "Akakçe Satıcı",
+                   "Braunshop", "Trendyol", "Hepsiburada", "N11", "İdefix"]
+    show_cols = [c for c in table_order if c in display_df.columns]
     st.markdown(display_df[show_cols].to_html(escape=False, index=False), unsafe_allow_html=True)
 
     # ================= EXCEL İNDİRME =================
     tr_time = datetime.utcnow() + timedelta(hours=3)
     excel_name = f"Saglik_Aksiyon_{tr_time.strftime('%d-%m-%Y_%H-%M')}.xlsx"
 
-    export_cols = ["Ürün Adı", "Ürün Kodu", "Alt Grup", "Hedef Fiyat", "En Düşük Fiyat"] + \
-                  [f"{c}_fiyat" for c in PLATFORM_COLS]
-    export_df = filtered[[c for c in export_cols if c in filtered.columns]].copy()
-    export_df.columns = ["Ürün Adı", "Ürün Kodu", "Alt Grup", "Hedef Fiyat", "En Düşük Fiyat"] + PLATFORM_COLS
+    export_map = {"Ürün Adı": "Ürün Adı", "Ürün Kodu": "Ürün Kodu", "Alt Grup": "Alt Grup",
+                  "Hedef Fiyat": "Hedef Fiyat", "En Düşük Fiyat": "En Düşük Fiyat",
+                  "Akakçe_fiyat": "Akakçe", "Akakçe Satıcı": "Akakçe Satıcı"}
+    for c in PLATFORM_COLS:
+        if c != "Akakçe":
+            export_map[f"{c}_fiyat"] = c
+    present = [c for c in export_map if c in filtered.columns]
+    export_df = filtered[present].rename(columns=export_map)
 
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
