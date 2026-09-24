@@ -4,7 +4,6 @@ import re
 import io
 import os
 import base64
-import html as _html
 from datetime import datetime, timedelta, timezone
 import gspread
 from google.oauth2.service_account import Credentials
@@ -91,25 +90,6 @@ def dosyadan_data_uri(dosya_adi):
             except Exception:
                 pass
     return None
-
-
-def barkod_hucre(barkod, urun_adi):
-    b = str(barkod or "").strip()
-    if b.endswith(".0"):
-        b = b[:-2]
-    ad = _html.escape(" ".join(str(urun_adi or "").split()), quote=True)
-    if not b:
-        return ad or "-"
-    return f'<span class="barkod" title="{ad}">{b}</span>'
-
-
-def thumb_html(url):
-    url = str(url or "").strip()
-    if not url.startswith("http"):
-        return ""
-    u = url.replace('"', "&quot;")
-    return (f'<div class="thumb"><img src="{u}" referrerpolicy="no-referrer" loading="lazy">'
-            f'<div class="thumb-buyuk"><img src="{u}" referrerpolicy="no-referrer" loading="lazy"></div></div>')
 
 
 # ================= GOOGLE SHEETS BAĞLANTISI =================
@@ -382,125 +362,109 @@ def load_buybox():
     return df, zaman
 
 
-def gun_bandi():
+def gun_bandi_goster():
     gun = (datetime.now(timezone.utc) + timedelta(hours=3)).weekday()
     if gun == 3:
-        st.info("📅 **Perşembe: BuyBox hazırlık günü.** Aşağıdaki önerilen fiyatları Trendyol ve Hepsiburada'da uygula. "
-                "Fiyatlar Cuma, Cumartesi ve Pazar boyunca geçerli olacak.")
+        tasarim.bant("bilgi", "Perşembe: BuyBox hazırlık günü.",
+                     "Aşağıdaki önerilen fiyatları Trendyol ve Hepsiburada'da uygula; fiyatlar Cuma, Cumartesi ve "
+                     "Pazar boyunca geçerli olacak.", "📅")
     elif gun in (4, 5, 6):
-        st.success("🛒 **BuyBox dönemi (Cuma-Pazar).** Perşembe belirlenen fiyatlar aktif olmalı.")
+        tasarim.bant("basari", "BuyBox dönemi (Cuma-Pazar).", "Perşembe belirlenen fiyatlar aktif olmalı.", "🛒")
     elif gun == 0:
-        st.warning("↩️ **Pazartesi: tavsiye satış fiyatına dönüş günü.** BuyBox için indirdiğin fiyatları tavsiye fiyata geri çek.")
+        tasarim.bant("uyari", "Pazartesi: TSF'ye dönüş günü.",
+                     "BuyBox için indirdiğin fiyatları tavsiye satış fiyatına geri çek.", "↩️")
     else:
-        st.info("Normal dönem: tavsiye satış fiyatları geçerli. Bir sonraki BuyBox önerisi Perşembe hazırlanacak.")
+        tasarim.bant("normal", "Normal dönem.",
+                     "Tavsiye satış fiyatları geçerli; bir sonraki BuyBox önerisi Perşembe hazırlanacak.", "ℹ️")
 
 
-def _tl(v):
-    return f"{v:,.2f} TL" if v is not None and pd.notna(v) else "-"
+def bb_donustur(df, gorsel_map, barkod_map):
+    """BuyBox Sheet verisini tasarim.buybox_tablosu'nun beklediği satır listesine çevirir."""
+    satirlar = []
+    for _, r in df.iterrows():
+        kod = str(r.get("Ürün Kodu", "") or "").strip()
+        ad = " ".join(str(r.get("Ürün Adı", "") or "").split())
+        grup = str(r.get("Alt Grup", "") or "").strip()
+        barkod = str(barkod_map.get(kod, "") or "").strip()
+        if barkod.endswith(".0"):
+            barkod = barkod[:-2]
+
+        def rakip(on_ek):
+            fiyat = _sayi(r.get(f"{on_ek} Rakip Fiyat_fiyat"))
+            if fiyat is None:
+                return None
+            return {"ad": str(r.get(f"{on_ek} En Ucuz Rakip", "") or "").strip(), "fiyat": fiyat,
+                    "link": (str(r.get(f"{on_ek} Rakip Fiyat_link", "") or "").strip() or None)}
+
+        durum = str(r.get("Durum", "") or "").strip()
+        fark_y = _sayi(r.get("Fark (%)"))
+        inilecek = durum == "BuyBox için in"
+        satirlar.append({
+            "kod": kod, "tam_ad": ad, "grup": grup, "barkod": barkod, "gorsel": str(gorsel_map.get(kod, "") or ""),
+            "tsf": _sayi(r.get("Tavsiye Fiyat")), "ty": rakip("TY"), "hb": rakip("HB"),
+            "oneri": _sayi(r.get("Önerilen BuyBox Fiyatı")), "durum": durum,
+            "fark_tl": _sayi(r.get("Fark (TL)")), "fark_yuzde": fark_y,
+            "ty_bb": str(r.get("TY BuyBox Sahibi", "") or "").strip(),
+            "hb_bb": str(r.get("HB BuyBox Sahibi", "") or "").strip(),
+            "inilecek": inilecek, "buyuk": inilecek and fark_y is not None and fark_y <= -BUYUK_SAPMA_YUZDE,
+            "_arama": " ".join((ad, kod, barkod, grup)).casefold(),
+        })
+    return satirlar
 
 
-def rakip_hucre(ad, fiyat, link):
-    if fiyat is None or pd.isna(fiyat):
-        return "-"
-    fiyat_html = f'<span class="pill pill-plain">{_tl(fiyat)}</span>'
-    if link:
-        fiyat_html = f'<a class="pill pill-plain" href="{link.replace(chr(34), "&quot;")}" target="_blank">{_tl(fiyat)}</a>'
-    return f'<div style="font-size:12px; margin-bottom:4px;">{ad or ""}</div>{fiyat_html}'
-
-
-def oneri_hucre(oneri, tavsiye, fark_yuzde):
-    if oneri is None or pd.isna(oneri):
-        return "-"
-    if fark_yuzde is not None and pd.notna(fark_yuzde) and fark_yuzde <= -BUYUK_SAPMA_YUZDE:
-        return f'<span class="pill pill-red" style="font-size:15px;">⚠️ {_tl(oneri)}</span>'
-    if tavsiye is not None and pd.notna(tavsiye) and oneri < tavsiye:
-        return f'<span class="pill pill-green" style="font-size:15px;">{_tl(oneri)}</span>'
-    return f'<span class="pill pill-plain" style="font-size:15px;">{_tl(oneri)}</span>'
+def _bb_excel_verisi(satirlar):
+    kayit = []
+    for s in satirlar:
+        kayit.append({
+            "Barkod": s["barkod"], "Ürün Kodu": s["kod"], "Ürün Adı": s["tam_ad"], "Alt Grup": s["grup"],
+            "TSF": s["tsf"],
+            "TY En Ucuz Rakip": (s["ty"] or {}).get("ad", ""), "TY Rakip Fiyat": (s["ty"] or {}).get("fiyat"),
+            "HB En Ucuz Rakip": (s["hb"] or {}).get("ad", ""), "HB Rakip Fiyat": (s["hb"] or {}).get("fiyat"),
+            "Önerilen BuyBox Fiyatı": s["oneri"], "Fark (TL)": s["fark_tl"], "Fark (%)": s["fark_yuzde"],
+            "Durum": s["durum"], "TY BuyBox Sahibi": s["ty_bb"], "HB BuyBox Sahibi": s["hb_bb"],
+        })
+    out = io.BytesIO()
+    with pd.ExcelWriter(out, engine="openpyxl") as w:
+        pd.DataFrame(kayit).to_excel(w, index=False, sheet_name="BuyBox")
+    return out.getvalue()
 
 
 def buybox_sayfasi():
-    gun_bandi()
     df, zaman = load_buybox()
-    gorsel_map = {}
-    fiyat_df, _ = load_data()
-    if fiyat_df is not None and "Görsel" in fiyat_df.columns:
-        gorsel_map = {str(k).strip(): v for k, v in zip(fiyat_df["Ürün Kodu"], fiyat_df["Görsel"]) if v}
-    barkod_map = {}
-    if fiyat_df is not None and "Barkod" in fiyat_df.columns:
-        barkod_map = {str(k).strip(): v for k, v in zip(fiyat_df["Ürün Kodu"], fiyat_df["Barkod"]) if v}
-    if zaman:
-        st.markdown(f'<div style="text-align:right;"><span class="update-badge">🔄 Öneri verisi: {zaman.replace("Son Güncelleme: ", "")}</span></div>',
-                    unsafe_allow_html=True)
-
+    tasarim.bb_baslik(zaman.replace("Son Güncelleme: ", "") if zaman else "", BUYUK_SAPMA_YUZDE)
+    gun_bandi_goster()
     if df is None or df.empty:
         st.warning("Henüz BuyBox verisi yok. Bilgisayarda buybox_script.py çalıştıktan sonra burada görünecek.")
         return
 
-    inilecek = df[df["Durum"] == "BuyBox için in"] if "Durum" in df.columns else df.iloc[0:0]
-    buyuk = inilecek[inilecek["Fark (%)"] <= -BUYUK_SAPMA_YUZDE] if "Fark (%)" in inilecek.columns else inilecek.iloc[0:0]
-    m1, m2, m3, m4 = st.columns(4)
-    m1.metric("İnilmesi gereken ürün", len(inilecek))
-    m2.metric("TSF'de kalacak", len(df) - len(inilecek))
-    m3.metric("Ortalama indirim", f"-%{abs(inilecek['Fark (%)'].mean()):.1f}".replace(".", ",") if len(inilecek) else "-")
-    m4.metric(f"Büyük sapma (%{BUYUK_SAPMA_YUZDE}+)", len(buyuk))
+    fiyat_df, _ = load_data()
+    gorsel_map, barkod_map = {}, {}
+    if fiyat_df is not None and "Ürün Kodu" in fiyat_df.columns:
+        kodlar = [str(k).strip() for k in fiyat_df["Ürün Kodu"]]
+        if "Görsel" in fiyat_df.columns:
+            gorsel_map = {k: v for k, v in zip(kodlar, fiyat_df["Görsel"]) if v}
+        if "Barkod" in fiyat_df.columns:
+            barkod_map = {k: v for k, v in zip(kodlar, fiyat_df["Barkod"]) if v}
+    satirlar = bb_donustur(df, gorsel_map, barkod_map)
 
-    c1, c2, c3 = st.columns([2, 2, 2])
+    c1, c2, c3 = st.columns([2.2, 2.2, 1])
     with c1:
-        ara = st.text_input("🔍 Ürün Ara...", key="bb_ara")
+        ara = st.text_input("Ürün ara", placeholder="Ürün adı, kodu ya da barkod", key="bb_ara")
     with c2:
-        gruplar = sorted([g for g in df.get("Alt Grup", pd.Series(dtype=str)).dropna().unique() if g])
-        grup = st.multiselect("📂 Alt Grup", gruplar, placeholder="Tümü", key="bb_grup")
+        gruplar = sorted({s["grup"] for s in satirlar if s["grup"]})
+        secilen = st.multiselect("Alt Grup", gruplar, placeholder="Tümü", key="bb_grup")
+    if ara and ara.strip():
+        aranan = ara.strip().casefold()
+        satirlar = [s for s in satirlar if aranan in s["_arama"]]
+    if secilen:
+        satirlar = [s for s in satirlar if s["grup"] in secilen]
     with c3:
-        filtre = st.selectbox("🎯 Göster", ["Tümü", "Sadece inilecekler", "Sadece büyük sapmalar"], key="bb_filtre")
+        st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
+        zaman_ek = (datetime.now(timezone.utc) + timedelta(hours=3)).strftime("%d-%m-%Y_%H-%M")
+        st.download_button("📥 Excel'e Aktar", _bb_excel_verisi(satirlar), f"BuyBox_Onerisi_{zaman_ek}.xlsx",
+                           "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", key="bb_excel")
 
-    f = df.copy()
-    if ara:
-        f = f[f.apply(lambda r: r.astype(str).str.contains(ara, case=False).any(), axis=1)]
-    if grup:
-        f = f[f["Alt Grup"].isin(grup)]
-    if filtre == "Sadece inilecekler":
-        f = f[f["Durum"] == "BuyBox için in"]
-    elif filtre == "Sadece büyük sapmalar":
-        f = f[(f["Durum"] == "BuyBox için in") & (f["Fark (%)"] <= -BUYUK_SAPMA_YUZDE)]
-
-    st.caption(f"{len(f)} ürün gösteriliyor · Öneri = Braun Shop dışındaki en ucuz stoklu rakibin en az 10 TL altı, "
-               f"sonu 9 ile biten fiyat · ⚠️ = tavsiye fiyatından %{BUYUK_SAPMA_YUZDE} veya daha fazla aşağıda")
-
-    satirlar = []
-    for _, r in f.iterrows():
-        fark_tl, fark_y = r.get("Fark (TL)"), r.get("Fark (%)")
-        fark_metni = "-"
-        if fark_tl is not None and pd.notna(fark_tl) and fark_tl != 0:
-            fark_metni = f"{fark_tl:,.0f} TL<br><small>{'-' if fark_y < 0 else '+'}%{abs(fark_y):.1f}</small>".replace(".", ",")
-        satirlar.append({
-            "Görsel": thumb_html(gorsel_map.get(str(r.get("Ürün Kodu", "")).strip())),
-            "Barkod": barkod_hucre(barkod_map.get(str(r.get("Ürün Kodu", "")).strip()), r.get("Ürün Adı")),
-            "Ürün Kodu": r.get("Ürün Kodu", ""),
-            "TSF": _tl(r.get("Tavsiye Fiyat")),
-            "Trendyol En Ucuz Rakip": rakip_hucre(r.get("TY En Ucuz Rakip"), r.get("TY Rakip Fiyat_fiyat"), r.get("TY Rakip Fiyat_link")),
-            "Hepsiburada En Ucuz Rakip": rakip_hucre(r.get("HB En Ucuz Rakip"), r.get("HB Rakip Fiyat_fiyat"), r.get("HB Rakip Fiyat_link")),
-            "Önerilen BuyBox Fiyatı": oneri_hucre(r.get("Önerilen BuyBox Fiyatı"), r.get("Tavsiye Fiyat"), fark_y),
-            "Fark": fark_metni,
-            "Durum": r.get("Durum", ""),
-            "BuyBox Sahibi (TY / HB)": f'{r.get("TY BuyBox Sahibi", "") or "-"}<br>{r.get("HB BuyBox Sahibi", "") or "-"}',
-        })
-    if satirlar:
-        st.markdown(pd.DataFrame(satirlar).to_html(escape=False, index=False, classes="rapor-tablo"),
-                    unsafe_allow_html=True)
-
-    tr_time = datetime.now(timezone.utc) + timedelta(hours=3)
-    disa = ["Ürün Adı", "Ürün Kodu", "Alt Grup", "Tavsiye Fiyat", "TY En Ucuz Rakip", "TY Rakip Fiyat_fiyat",
-            "HB En Ucuz Rakip", "HB Rakip Fiyat_fiyat", "En Ucuz Rakip Fiyat", "Önerilen BuyBox Fiyatı",
-            "Fark (TL)", "Fark (%)", "Durum", "TY BuyBox Sahibi", "HB BuyBox Sahibi"]
-    ex = f[[c for c in disa if c in f.columns]].rename(columns={"Tavsiye Fiyat": "TSF",
-                                                                "TY Rakip Fiyat_fiyat": "TY Rakip Fiyat",
-                                                                "HB Rakip Fiyat_fiyat": "HB Rakip Fiyat"})
-    out = io.BytesIO()
-    with pd.ExcelWriter(out, engine="openpyxl") as w:
-        ex.to_excel(w, index=False, sheet_name="BuyBox")
-    st.download_button("📥 BuyBox Önerilerini Excel'e Aktar", out.getvalue(),
-                       f"BuyBox_Onerisi_{tr_time.strftime('%d-%m-%Y_%H-%M')}.xlsx",
-                       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", key="bb_excel")
+    tasarim.bb_govde(satirlar, ESIK_YUZDE, BUYUK_SAPMA_YUZDE)
 
 
 # ================= SAYFA =================
