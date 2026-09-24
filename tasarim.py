@@ -127,35 +127,42 @@ a.pt-link:hover .pt-cell { box-shadow:0 4px 12px rgba(20,70,45,.14); transform:t
 /* [eklendi] Urun tablosu: beyaz kart (st.container key="pt_urun_tablosu") ve eski duzende tablo */
 .st-key-pt_urun_tablosu { background:#FFFFFF; border:1px solid #DCE9E1; border-radius:20px;
                           box-shadow:0 6px 24px rgba(20,70,45,.06); padding:20px 22px 12px; }
-.pt-tablo { width:100%; border-collapse:separate; border-spacing:0; font-size:13px; color:#15261D; }
-.pt-tablo th { text-align:left; vertical-align:bottom; padding:10px 8px; border-bottom:1px solid #E6EEE9;
-               font-size:11px; font-weight:700; color:#6A7E72; letter-spacing:.06em; text-transform:uppercase; }
-.pt-tablo th small { display:block; font-size:11px; font-weight:500; color:#7A8C81; letter-spacing:0; text-transform:none; margin-top:2px; }
-.pt-tablo th.ch b { display:block; font-size:13px; font-weight:700; color:#15261D; letter-spacing:0; text-transform:none; }
-.pt-tablo th.ch { cursor:help; }
-.pt-tablo th .logo { height:30px; display:flex; align-items:center; }
-.pt-tablo th .logo img, .pt-tablo th .logo svg { height:24px; max-width:118px; object-fit:contain; }
-.pt-tablo td { padding:8px; border-bottom:1px solid #EEF3F0; vertical-align:middle; }
-.pt-tablo tbody tr:last-child td { border-bottom:0; }
-.pt-tablo tbody tr:hover td { background:#FAFCFB; }
-.pt-bk { font-variant-numeric:tabular-nums; color:#3E4A44; white-space:nowrap; cursor:help; }
-.pt-grp { color:#52675A; }
+table.pt-tablo { width:100%; border-collapse:separate !important; border-spacing:0; margin:0 !important; font-size:13px; color:#15261D; }
+table.pt-tablo tr { border:0 !important; }
+table.pt-tablo th, table.pt-tablo td { border:0 !important; border-bottom:1px solid #EEF3F0 !important; padding:6px 8px !important;
+                                       text-align:center !important; vertical-align:middle; }
+table.pt-tablo th { vertical-align:bottom; padding-bottom:8px !important; border-bottom-color:#E1EAE4 !important;
+                    font-size:11px; font-weight:700; color:#6A7E72; letter-spacing:.05em; text-transform:uppercase; }
+table.pt-tablo th small { display:block; font-size:10.5px; font-weight:700; color:#8A9A90; letter-spacing:0; text-transform:none; margin-top:3px; }
+table.pt-tablo th.ch { cursor:help; }
+table.pt-tablo th .logo { height:28px; display:flex; align-items:center; justify-content:center; }
+table.pt-tablo th .logo img, table.pt-tablo th .logo svg { height:22px; max-width:112px; object-fit:contain; }
+table.pt-tablo tbody tr:last-child td { border-bottom:0 !important; }
+table.pt-tablo tbody tr:hover td { background:#FAFCFB; }
+.pt-bk { font-variant-numeric:tabular-nums; color:#3E4A44; white-space:nowrap; cursor:help; font-size:12.5px; }
+.pt-grp { color:#52675A; font-size:12.5px; white-space:nowrap; }
 .pt-kod { position:relative; display:inline-block; font-weight:700; color:#10281B; white-space:nowrap; }
 .pt-kod.resimli { cursor:zoom-in; border-bottom:1px dotted #9FB5A8; }
 .pt-kod .buyuk { visibility:hidden; opacity:0; position:absolute; left:calc(100% + 12px); top:50%; transform:translateY(-50%);
-                 z-index:9999; background:#fff; padding:6px; border-radius:12px; border:1px solid #DCE9E1;
-                 box-shadow:0 10px 35px rgba(20,40,30,.25); transition:opacity .15s; }
-.pt-kod .buyuk img { width:170px; height:170px; object-fit:contain; display:block; }
+                 width:184px; box-sizing:border-box; z-index:9999; background:#fff; padding:6px; border-radius:12px;
+                 border:1px solid #DCE9E1; box-shadow:0 10px 35px rgba(20,40,30,.25); transition:opacity .15s; }
+.pt-kod .buyuk img { width:170px !important; height:170px !important; max-width:none !important; object-fit:contain; display:block; }
 .pt-kod:hover .buyuk { visibility:visible; opacity:1; }
-.pt-ref { font-variant-numeric:tabular-nums; white-space:nowrap; color:#52675A; font-weight:600; }
+.pt-ref { font-variant-numeric:tabular-nums; white-space:nowrap; color:#52675A; font-weight:500; font-size:13px; }
 .pt-ref.aktif { color:#10281B; font-weight:800; }
-.pt-ref small { display:block; font-size:10.5px; font-weight:500; color:#7A8C81; }
-.pt-pill { display:inline-flex; flex-direction:column; gap:2px; padding:6px 10px; border-radius:10px; border:1px solid; min-width:94px; box-sizing:border-box; }
-.pt-pill .p { display:flex; align-items:center; gap:4px; font-size:14px; font-weight:700; white-space:nowrap; font-variant-numeric:tabular-nums; }
-.pt-pill .d { display:flex; align-items:center; justify-content:space-between; gap:6px; font-size:10.5px; font-weight:700; white-space:nowrap; }
-.pt-pill.pt-none { font-size:12px; padding:8px 10px; }
+.pt-ref small { display:block; font-size:10px; font-weight:500; color:#8A9A90; }
+.pt-pill { display:inline-flex; align-items:center; gap:5px; padding:3px 10px; border-radius:999px; border:0 !important;
+           font-size:12.5px; font-weight:700; line-height:1.45; white-space:nowrap; font-variant-numeric:tabular-nums; }
+.pt-pill.pt-ok { background:#E3F4EA; color:#166B3D; }
+.pt-pill.pt-warn { background:#FFF1CC; color:#7A5200; }
+.pt-pill.pt-bad { background:#FBDCD8; color:#9E2418; }
+.pt-pill.pt-nt { background:#F1F4F2; color:#3E4A44; }
+.pt-pill .bb { font-size:9px; line-height:13px; padding:0 3px; border-radius:4px; }
+.pt-pill .kupa { font-size:11px; }
+.pt-yok { color:#A7B4AC; font-weight:600; cursor:help; }
+a.pt-link { text-decoration:none !important; }
 a.pt-link .pt-pill { transition:box-shadow .15s, transform .15s; }
-a.pt-link:hover .pt-pill { box-shadow:0 4px 12px rgba(20,70,45,.14); transform:translateY(-1px); }
+a.pt-link:hover .pt-pill { box-shadow:0 3px 10px rgba(20,70,45,.16); transform:translateY(-1px); }
 .pt-alt-paneller { display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-top:20px; }
 .pt-row .tsf-alt { display:block; font-size:11px; font-weight:500; color:#6A7E72; margin-top:3px; line-height:1.35; }
 .bb { font-size:10px; font-weight:800; letter-spacing:.04em; padding:2px 6px; border-radius:6px; }
@@ -422,24 +429,30 @@ def _aksiyonlar_html(h: dict, ust_bosluk: bool = True) -> str:
         f'{h["tot"]["bad"]} kritik</span></div>{alarmlar}</div>')
 
 
+def _fmt2(v) -> str:
+    """Kuruşlu fiyatı kuruşuyla, tam fiyatı kuruşsuz gösterir: 5.586,23 ₺ / 5.759 ₺"""
+    if abs(v - round(v)) < 0.005:
+        return _fmt(v)
+    return f"{v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") + " ₺"
+
+
 def _hucre_klasik(c: dict, en_ucuz: bool = False) -> str:
-    """Kanal hücresi: fiyat, TSF'ye göre fark, BB rozeti, 🏆 (Trendyol/Hepsiburada en düşüğü)."""
+    """Kompakt kanal hücresi: fiyat, minik BB rozeti ve 🏆; TSF farkı üzerine gelince görünür."""
     if c["durum"] == "none":
-        return '<div class="pt-pill pt-none">Satışta yok</div>'
+        return '<span class="pt-yok" title="Satışta yok / liste dışı">–</span>'
     bb = ""
     if c.get("bb") is True:
-        bb = '<span class="bb own">BB</span>'
+        bb = '<span class="bb own" title="Buybox bizde">BB</span>'
     elif c.get("bb") is False:
-        bb = '<span class="bb lost">BB</span>'
-    kupa = " 🏆" if en_ucuz else ""
+        bb = '<span class="bb lost" title="Buybox başka satıcıda">BB</span>'
+    kupa = '<span class="kupa" title="Trendyol/Hepsiburada en düşüğü">🏆</span>' if en_ucuz else ""
     if c["durum"] == "nt":
-        ic = (f'<div class="pt-pill pt-nt"><div class="p">{_fmt(c["fiyat"])}{kupa}</div>'
-              f'<div class="d"><span>TSF yok</span>{bb}</div></div>')
+        ipucu = "TSF girilmemiş, karşılaştırma yok"
+    elif c["durum"] == "ok":
+        ipucu = "TSF ile aynı" if c["d"] <= 0.001 else f"TSF'nin %{_pct(c['d'])} üstünde"
     else:
-        d = c["d"]
-        fark = (("+%" + _pct(d)) if d > 0.001 else "TSF") if c["durum"] == "ok" else "−%" + _pct(d)
-        ic = (f'<div class="pt-pill pt-{c["durum"]}"><div class="p">{_IKON[c["durum"]]}{_fmt(c["fiyat"])}{kupa}</div>'
-              f'<div class="d"><span>{fark}</span>{bb}</div></div>')
+        ipucu = f"TSF'nin %{_pct(c['d'])} altında"
+    ic = f'<span class="pt-pill pt-{c["durum"]}" title="{ipucu}">{_fmt2(c["fiyat"])}{kupa}{bb}</span>'
     link = str(c.get("link") or "")
     if link.startswith("http"):
         return f'<a class="pt-link" href="{html.escape(link, quote=True)}" target="_blank">{ic}</a>'
@@ -463,23 +476,24 @@ def fiyat_tablosu_klasik(h: dict, filtre: str = "Tümü", not_: str = "", esik: 
         satirlar = [r for r in satirlar if r["bb_kayip"]]
 
     kanal_adlari = [k["ad"] for k in KANALLAR]
+    akakce_sayi = sum(1 for r in satirlar if r.get("akakce"))
     sayilar = {k: sum(1 for r in satirlar if r["hucreler"][i]["durum"] != "none") for i, k in enumerate(kanal_adlari)}
     bas = ('<th>Barkod</th><th>Ürün Kodu</th><th>Alt Grup</th><th>TSF</th>'
            '<th>Kampanya Fiyatı<small>Hafta sonu</small></th>')
     if akakce_goster:
-        bas += "<th>Akakçe<small>Piyasa en ucuzu</small></th>"
+        bas += f'<th title="Akakçe · piyasadaki en ucuz fiyat">Akakçe<small>{akakce_sayi} Ürün</small></th>'
     for k in KANALLAR:
         logo = KANAL_LOGOLARI.get(k["ad"], "")
         ipucu = html.escape(f'{k["ad"]} · {k["tur"]} · {sayilar[k["ad"]]} ürün', quote=True)
         icerik = f'<div class="logo">{logo}</div>' if logo else f'<b>{html.escape(k["ad"])}</b>'
-        bas += f'<th class="ch" title="{ipucu}">{icerik}</th>'
+        bas += f'<th class="ch" title="{ipucu}">{icerik}<small>{sayilar[k["ad"]]} Ürün</small></th>'
 
     govde = ""
     for r in satirlar:
         ad = html.escape(" ".join(str(r.get("tam_ad") or "").split()), quote=True)
         g = str(r.get("gorsel") or "")
         kod = html.escape(str(r.get("kod") or r.get("urun") or "-"))
-        if g.startswith("http"):
+        if g.startswith(("http", "data:image")):
             g = html.escape(g, quote=True)
             kod_html = (f'<span class="pt-kod resimli" title="{ad}">{kod}<span class="buyuk">'
                         f'<img src="{g}" referrerpolicy="no-referrer" loading="lazy"></span></span>')
@@ -513,7 +527,7 @@ def fiyat_tablosu_klasik(h: dict, filtre: str = "Tümü", not_: str = "", esik: 
         '<div class="pt-foot-note"><span><span class="bb own">BB</span> Buybox bizde</span>'
         '<span><span class="bb lost" style="color:#5F6B64">BB</span> Buybox başka satıcıda</span>'
         "<span>🏆 Trendyol/Hepsiburada en düşüğü</span>"
-        "<span>Kalın yazılı fiyat karşılaştırmada kullanılan fiyattır.</span>"
+        "<span>Kalın yazılı fiyat karşılaştırmada kullanılan fiyattır; TSF'ye göre farkı görmek için fiyatın üzerine gelin.</span>"
         + (f"<span>{html.escape(not_)}</span>" if not_ else "") + "</div>",
         unsafe_allow_html=True)
     return len(satirlar)
