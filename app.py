@@ -18,6 +18,7 @@ BUYUK_SAPMA_YUZDE = 15
 # Fiyat Takibi tablosunda hangi sütunların, hangi sırayla görüneceği.
 # Bir sütunu gizlemek için satırını sil; sırasını değiştirmek için satırın yerini değiştir.
 FIYAT_TABLOSU_SUTUNLARI = [
+    "Görsel",
     "Ürün Adı",
     "Ürün Kodu",
     "Alt Grup",
@@ -35,6 +36,7 @@ FIYAT_TABLOSU_SUTUNLARI = [
 # Panelde ve Excel çıktısında görünen başlıklar.
 # SOLDAKİ isimlere dokunma (sistem bunları kullanıyor); SAĞDAKİ yazıyı istediğin gibi değiştir.
 SUTUN_ETIKETLERI = {
+    "Görsel": "Görsel",
     "Ürün Adı": "Ürün Adı",
     "Ürün Kodu": "Ürün Kodu",
     "Alt Grup": "Alt Grup",
@@ -66,8 +68,28 @@ st.markdown("""
     a.pill:hover { filter: brightness(0.95); cursor: pointer; }
     .update-badge { color: #888; font-size: 12px; background: rgba(128,128,128,0.1); padding: 5px 14px; border-radius: 30px; }
     table td, table th { text-align: center !important; padding: 8px 10px !important; }
+    .thumb { position: relative; display: inline-block; cursor: zoom-in; }
+    .thumb > img { width: 46px; height: 46px; object-fit: contain; background: #fff; border-radius: 8px;
+                   border: 1px solid rgba(128,128,128,0.2); }
+    .thumb-buyuk { visibility: hidden; opacity: 0; position: absolute; left: 115%; top: 50%;
+                   transform: translateY(-50%); z-index: 9999; background: #fff; padding: 6px;
+                   border-radius: 12px; box-shadow: 0 10px 35px rgba(0,0,0,0.3); transition: opacity 0.15s; }
+    .thumb-buyuk img { width: 180px; height: 180px; object-fit: contain; display: block; }
+    .thumb:hover .thumb-buyuk { visibility: visible; opacity: 1; }
 </style>
 """, unsafe_allow_html=True)
+
+
+# Gorsellerde referrerpolicy="no-referrer" kullaniliyor; gorsel sunucusu baska siteden gelen istegi engellemesin diye.
+
+
+def thumb_html(url):
+    url = str(url or "").strip()
+    if not url.startswith("http"):
+        return ""
+    u = url.replace('"', "&quot;")
+    return (f'<div class="thumb"><img src="{u}" referrerpolicy="no-referrer" loading="lazy">'
+            f'<div class="thumb-buyuk"><img src="{u}" referrerpolicy="no-referrer" loading="lazy"></div></div>')
 
 
 # ================= GOOGLE SHEETS BAĞLANTISI =================
@@ -240,6 +262,7 @@ def fiyat_takibi_sayfasi():
             en_dusuk = r.get("En Düşük Fiyat")
 
             row_html = {
+                "Görsel": thumb_html(r.get("Görsel")),
                 "Ürün Adı": r.get("Ürün Adı", ""),
                 "Ürün Kodu": r.get("Ürün Kodu", ""),
                 "Alt Grup": r.get("Alt Grup", ""),
@@ -360,6 +383,10 @@ def oneri_hucre(oneri, tavsiye, fark_yuzde):
 def buybox_sayfasi():
     gun_bandi()
     df, zaman = load_buybox()
+    gorsel_map = {}
+    fiyat_df, _ = load_data()
+    if fiyat_df is not None and "Görsel" in fiyat_df.columns:
+        gorsel_map = {str(k).strip(): v for k, v in zip(fiyat_df["Ürün Kodu"], fiyat_df["Görsel"]) if v}
     if zaman:
         st.markdown(f'<div style="text-align:right;"><span class="update-badge">🔄 Öneri verisi: {zaman.replace("Son Güncelleme: ", "")}</span></div>',
                     unsafe_allow_html=True)
@@ -405,6 +432,7 @@ def buybox_sayfasi():
         if fark_tl is not None and pd.notna(fark_tl) and fark_tl != 0:
             fark_metni = f"{fark_tl:,.0f} TL<br><small>{'-' if fark_y < 0 else '+'}%{abs(fark_y):.1f}</small>".replace(".", ",")
         satirlar.append({
+            "Görsel": thumb_html(gorsel_map.get(str(r.get("Ürün Kodu", "")).strip())),
             "Ürün Adı": r.get("Ürün Adı", ""),
             "Ürün Kodu": r.get("Ürün Kodu", ""),
             "TSF": _tl(r.get("Tavsiye Fiyat")),
