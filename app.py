@@ -23,6 +23,17 @@ ESIK_YUZDE = 5          # Sarı ile kırmızı arasındaki sınır: TSF'nin %5't
 AKAKCE_GOSTER = True    # TSF sütununun altında Akakçe'deki piyasa en ucuz fiyatı yazsın mı (True / False)
 KANALLAR = ["Braunshop", "Trendyol", "Hepsiburada", "N11", "İdefix"]
 
+# Kanal logoları: sitelerin kendi sunucularında kullandıkları güncel, şeffaf logolar.
+# Adresi boş olan kanalda logo yerine adı yazar. Repoya aşağıdaki PLATFORM_LOGO_DOSYALARI adlarıyla
+# (örn. n11.png, idefix.png) dosya yüklersen, yüklediğin dosya bu adreslerin önüne geçer.
+KANAL_LOGO_ADRESLERI = {
+    "Braunshop": "https://www.braunshop.com.tr/Data/EditorFiles/braunshop/footer-logo.svg",
+    "Trendyol": "https://cdn.dsmcdn.com/sfweb-browsing/images/trendyol-logo_1761301016237.svg",
+    "Hepsiburada": "https://images.hepsiburada.net/storefront/storefront/www/assets/images/hepsiburada.svg",
+    "N11": "",
+    "İdefix": "",
+}
+
 # Platform basliklarindaki logolar: GitHub'da repoya (ya da "logos" klasorune) bu adlarla PNG yuklersen
 # o logo kullanilir; yuklemezsen sitenin kendi kucuk ikonu ve adi gosterilir.
 PLATFORM_LOGO_DOSYALARI = {"Akakçe": "akakce.png", "Braunshop": "braunshop.png", "Trendyol": "trendyol.png",
@@ -270,6 +281,10 @@ def veriyi_donustur(df, bb_df):
             "buybox": bb.get(kod, {}),
             "gorsel": str(r.get("Görsel", "") or ""),
             "tam_ad": ad,
+            # eski düzen tablo sütunları
+            "barkod": barkod, "kod": kod, "grup": grup, "tsf_gercek": tsf, "kampanya": kampanya,
+            "ref_turu": tur, "akakce": akakce,
+            "akakce_link": (str(r.get("Akakçe_link", "") or "").strip() or None),
             # panelin kendi kullanımı (arama, filtre, Excel)
             "_ad": ad, "_barkod": barkod, "_grup": grup, "_tsf": tsf, "_kampanya": kampanya, "_akakce": akakce,
             "_arama": " ".join((ad, kod, barkod, grup)).casefold(),
@@ -328,7 +343,7 @@ def fiyat_buybox_sayfasi(df):
             if bb_zaman else "BB bilgisi perşembe BuyBox taramasından sonra görünür.")
     if hafta_sonu_mu():
         notu += " Hafta sonu: kampanya fiyatı girilmiş ürünler kampanya fiyatına göre karşılaştırılır."
-    tasarim.govde(satirlar, ESIK_YUZDE, tablo_notu=notu)
+    tasarim.govde(satirlar, ESIK_YUZDE, tablo_notu=notu, klasik=True, akakce_goster=AKAKCE_GOSTER)
 
 
 # ================= BUYBOX SEKMESİ =================
@@ -488,13 +503,13 @@ def buybox_sayfasi():
 
 # ================= SAYFA =================
 tasarim.tema_uygula()
-# Repoya trendyol.png, hepsiburada.png, n11.png, idefix.png yuklersen tasarimda logolar gorunur.
-for _kanal, _dosya in PLATFORM_LOGO_DOSYALARI.items():
-    if _kanal in ("Braunshop", "Akakçe"):
-        continue                      # Braunshop icin tasarimdaki BAY logosu kullaniliyor
-    _uri = dosyadan_data_uri(_dosya)
-    if _uri:
-        tasarim.KANAL_LOGOLARI[_kanal] = f'<img src="{_uri}" height="22" style="max-width:120px;object-fit:contain">'
+for _kanal in KANALLAR:
+    _src = dosyadan_data_uri(PLATFORM_LOGO_DOSYALARI.get(_kanal, "")) or KANAL_LOGO_ADRESLERI.get(_kanal, "")
+    if _src:
+        # Braunshop logosu sitenin koyu alt bandından geliyor; beyaz zeminde görünsün diye koyulaştırılıyor
+        _stil = "max-width:120px;object-fit:contain" + (";filter:brightness(0)" if _kanal == "Braunshop" else "")
+        tasarim.KANAL_LOGOLARI[_kanal] = (f'<img src="{_src}" height="22" alt="{_kanal}" '
+                                         f'referrerpolicy="no-referrer" style="{_stil}">')
 
 _df_fiyat, _guncelleme = load_data()
 _son = _guncelleme.replace("Son Güncelleme:", "").strip().replace(" ", " · ", 1) if _guncelleme else ""
