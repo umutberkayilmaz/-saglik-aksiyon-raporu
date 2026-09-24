@@ -58,7 +58,9 @@ st.markdown("""
     .thumb-buyuk { visibility: hidden; opacity: 0; position: absolute; left: 115%; top: 50%;
                    transform: translateY(-50%); z-index: 9999; background: #fff; padding: 6px;
                    border-radius: 12px; box-shadow: 0 10px 35px rgba(0,0,0,0.3); transition: opacity 0.15s; }
-    .thumb-buyuk img { width: 180px; height: 180px; object-fit: contain; display: block; }
+    .thumb-buyuk { width: 194px; box-sizing: border-box; }
+    .thumb-buyuk img { width: 180px !important; height: 180px !important; max-width: none !important;
+                       object-fit: contain; display: block; }
     .thumb:hover .thumb-buyuk { visibility: visible; opacity: 1; }
     .rapor-tablo th { text-transform: uppercase; font-size: 11px !important; color: #888 !important;
                       font-weight: 600 !important; letter-spacing: 0.3px; vertical-align: middle !important; }
