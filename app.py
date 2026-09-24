@@ -25,7 +25,6 @@ FIYAT_TABLOSU_SUTUNLARI = [
     "TSF",
     "Kampanya Fiyatı",
     "Akakçe",
-    "Akakçe Satıcı",
     "Braunshop",
     "Trendyol",
     "Hepsiburada",
@@ -251,8 +250,8 @@ def fiyat_takibi_sayfasi():
         bugun_ref = "Hafta Sonu Kampanya Fiyatı'na (doluysa)" if hafta_sonu_mu() else "TSF'ye"
         st.caption(f"{len(filtered)} ürün gösteriliyor ({len(df)} toplam) · Renkler bugün {bugun_ref} göre, "
                    f"kalın yazılı fiyat karşılaştırmada kullanılan fiyattır (ikisi de boşsa Braunshop fiyatı) · "
-                   f"🏆 = Trendyol/Hepsiburada arasındaki en düşük fiyat · Akakçe sütunu piyasadaki en ucuz fiyatı "
-                   f"ve satıcısını gösterir")
+                   f"🏆 = Trendyol/Hepsiburada arasındaki en düşük fiyat · Akakçe sütunu piyasadaki en ucuz "
+                   f"fiyatı gösterir")
 
         # ================= TABLO OLUŞTURMA =================
         display_rows = []
