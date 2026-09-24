@@ -14,6 +14,42 @@ GSHEET_WORKSHEET = "Guncel"
 BUYBOX_WORKSHEET = "BuyBox"
 BUYUK_SAPMA_YUZDE = 15
 
+# ================= PANEL SÜTUN AYARLARI (buradan düzenleyebilirsin) =================
+# Fiyat Takibi tablosunda hangi sütunların, hangi sırayla görüneceği.
+# Bir sütunu gizlemek için satırını sil; sırasını değiştirmek için satırın yerini değiştir.
+FIYAT_TABLOSU_SUTUNLARI = [
+    "Ürün Adı",
+    "Ürün Kodu",
+    "Alt Grup",
+    "TSF",
+    "Kampanya Fiyatı",
+    "Akakçe",
+    "Akakçe Satıcı",
+    "Braunshop",
+    "Trendyol",
+    "Hepsiburada",
+    "N11",
+    "İdefix",
+]
+
+# Panelde ve Excel çıktısında görünen başlıklar.
+# SOLDAKİ isimlere dokunma (sistem bunları kullanıyor); SAĞDAKİ yazıyı istediğin gibi değiştir.
+SUTUN_ETIKETLERI = {
+    "Ürün Adı": "Ürün Adı",
+    "Ürün Kodu": "Ürün Kodu",
+    "Alt Grup": "Alt Grup",
+    "TSF": "TSF",
+    "Kampanya Fiyatı": "Hafta Sonu Kampanya Fiyatı",
+    "En Düşük Fiyat": "En Düşük Fiyat",
+    "Akakçe": "Akakçe",
+    "Akakçe Satıcı": "Akakçe Satıcı",
+    "Braunshop": "Braunshop",
+    "Trendyol": "Trendyol",
+    "Hepsiburada": "Hepsiburada",
+    "N11": "N11",
+    "İdefix": "İdefix",
+}
+
 PLATFORM_COLS = ["Akakçe", "Braunshop", "Trendyol", "Hepsiburada", "N11", "İdefix"]
 LOWEST_SOURCE_COLS = ["Trendyol", "Hepsiburada"]  # "En Dusuk Fiyat" bu ikisinden hesaplaniyor
 
@@ -90,20 +126,22 @@ def load_data():
         if not values:
             return None, ""
 
-        update_text = ""
-        try:
-            update_text = ws.acell("N1").value or ""
-        except Exception:
-            pass
-
-        headers = values[0]
+        headers = [str(h).strip() for h in values[0]]
+        update_text = next((h for h in headers if h.startswith("Son Güncelleme")), "")
+        if not update_text:
+            try:
+                update_text = ws.acell("N1").value or ""
+            except Exception:
+                pass
+        if "TSF" not in headers and "Hedef Fiyat" in headers:
+            headers = ["TSF" if h == "Hedef Fiyat" else h for h in headers]
         rows = values[1:]
         formula_rows = formulas[1:]
 
         df = pd.DataFrame(rows, columns=headers)
         df_formula = pd.DataFrame(formula_rows, columns=headers)
 
-        for col in ["Hedef Fiyat", "En Düşük Fiyat"]:
+        for col in ["TSF", "Kampanya Fiyatı", "En Düşük Fiyat"]:
             if col in df.columns:
                 df[col] = df[col].apply(parse_price_from_cell)
 
@@ -142,6 +180,29 @@ def price_pill(price, link, ref, is_lowest):
     return f'<span class="pill {cls}{extra_cls}">{text}</span>'
 
 
+def hafta_sonu_mu():
+    return (datetime.now(timezone.utc) + timedelta(hours=3)).weekday() in (4, 5, 6)
+
+
+def _dolu(v):
+    return v is not None and not (isinstance(v, float) and pd.isna(v))
+
+
+def aktif_referans(tsf, kampanya, braunshop):
+    """Cuma-Pazar kampanya fiyati (doluysa), diger gunler TSF; ikisi de yoksa Braunshop fiyati."""
+    if hafta_sonu_mu() and _dolu(kampanya):
+        return kampanya, "kampanya"
+    if _dolu(tsf):
+        return tsf, "tsf"
+    return (braunshop, "braunshop") if _dolu(braunshop) else (None, "")
+
+
+def fiyat_hucre(v, aktif):
+    if not _dolu(v):
+        return "-"
+    return f"<b>{v:,.2f} TL</b>" if aktif else f"{v:,.2f} TL"
+
+
 # ================= FİYAT TAKİBİ SEKMESİ =================
 def fiyat_takibi_sayfasi():
     df, update_text = load_data()
@@ -165,19 +226,25 @@ def fiyat_takibi_sayfasi():
         if secilen_grup:
             filtered = filtered[filtered["Alt Grup"].isin(secilen_grup)]
 
-        st.caption(f"{len(filtered)} ürün gösteriliyor ({len(df)} toplam) — 🏆 = Trendyol/Hepsiburada arasındaki en düşük fiyat · Akakçe sütunu piyasadaki en ucuz fiyatı ve satıcısını gösterir")
+        bugun_ref = "Hafta Sonu Kampanya Fiyatı'na (doluysa)" if hafta_sonu_mu() else "TSF'ye"
+        st.caption(f"{len(filtered)} ürün gösteriliyor ({len(df)} toplam) · Renkler bugün {bugun_ref} göre, "
+                   f"kalın yazılı fiyat karşılaştırmada kullanılan fiyattır (ikisi de boşsa Braunshop fiyatı) · "
+                   f"🏆 = Trendyol/Hepsiburada arasındaki en düşük fiyat · Akakçe sütunu piyasadaki en ucuz fiyatı "
+                   f"ve satıcısını gösterir")
 
         # ================= TABLO OLUŞTURMA =================
         display_rows = []
         for _, r in filtered.iterrows():
-            ref = r.get("Hedef Fiyat")
+            tsf, kampanya = r.get("TSF"), r.get("Kampanya Fiyatı")
+            ref, ref_turu = aktif_referans(tsf, kampanya, r.get("Braunshop_fiyat"))
             en_dusuk = r.get("En Düşük Fiyat")
 
             row_html = {
                 "Ürün Adı": r.get("Ürün Adı", ""),
                 "Ürün Kodu": r.get("Ürün Kodu", ""),
                 "Alt Grup": r.get("Alt Grup", ""),
-                "Hedef Fiyat": f"{ref:,.2f} TL" if pd.notna(ref) else "-",
+                "TSF": fiyat_hucre(tsf, ref_turu == "tsf"),
+                "Kampanya Fiyatı": fiyat_hucre(kampanya, ref_turu == "kampanya"),
             }
             for col in PLATFORM_COLS:
                 price = r.get(f"{col}_fiyat")
@@ -194,23 +261,22 @@ def fiyat_takibi_sayfasi():
             display_rows.append(row_html)
 
         display_df = pd.DataFrame(display_rows)
-        table_order = ["Ürün Adı", "Ürün Kodu", "Alt Grup", "Hedef Fiyat", "Akakçe", "Akakçe Satıcı",
-                       "Braunshop", "Trendyol", "Hepsiburada", "N11", "İdefix"]
-        show_cols = [c for c in table_order if c in display_df.columns]
-        st.markdown(display_df[show_cols].to_html(escape=False, index=False), unsafe_allow_html=True)
+        show_cols = [c for c in FIYAT_TABLOSU_SUTUNLARI if c in display_df.columns]
+        st.markdown(display_df[show_cols].rename(columns=SUTUN_ETIKETLERI).to_html(escape=False, index=False),
+                    unsafe_allow_html=True)
 
         # ================= EXCEL İNDİRME =================
         tr_time = datetime.now(timezone.utc) + timedelta(hours=3)
         excel_name = f"Saglik_Aksiyon_{tr_time.strftime('%d-%m-%Y_%H-%M')}.xlsx"
 
         export_map = {"Ürün Adı": "Ürün Adı", "Ürün Kodu": "Ürün Kodu", "Alt Grup": "Alt Grup",
-                      "Hedef Fiyat": "Hedef Fiyat", "En Düşük Fiyat": "En Düşük Fiyat",
+                      "TSF": "TSF", "Kampanya Fiyatı": "Kampanya Fiyatı", "En Düşük Fiyat": "En Düşük Fiyat",
                       "Akakçe_fiyat": "Akakçe", "Akakçe Satıcı": "Akakçe Satıcı"}
         for c in PLATFORM_COLS:
             if c != "Akakçe":
                 export_map[f"{c}_fiyat"] = c
         present = [c for c in export_map if c in filtered.columns]
-        export_df = filtered[present].rename(columns=export_map)
+        export_df = filtered[present].rename(columns=export_map).rename(columns=SUTUN_ETIKETLERI)
 
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine="openpyxl") as writer:
@@ -306,7 +372,7 @@ def buybox_sayfasi():
     buyuk = inilecek[inilecek["Fark (%)"] <= -BUYUK_SAPMA_YUZDE] if "Fark (%)" in inilecek.columns else inilecek.iloc[0:0]
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("İnilmesi gereken ürün", len(inilecek))
-    m2.metric("Tavsiye fiyatta kalacak", len(df) - len(inilecek))
+    m2.metric("TSF'de kalacak", len(df) - len(inilecek))
     m3.metric("Ortalama indirim", f"-%{abs(inilecek['Fark (%)'].mean()):.1f}".replace(".", ",") if len(inilecek) else "-")
     m4.metric(f"Büyük sapma (%{BUYUK_SAPMA_YUZDE}+)", len(buyuk))
 
@@ -341,7 +407,7 @@ def buybox_sayfasi():
         satirlar.append({
             "Ürün Adı": r.get("Ürün Adı", ""),
             "Ürün Kodu": r.get("Ürün Kodu", ""),
-            "Tavsiye Fiyat": _tl(r.get("Tavsiye Fiyat")),
+            "TSF": _tl(r.get("Tavsiye Fiyat")),
             "Trendyol En Ucuz Rakip": rakip_hucre(r.get("TY En Ucuz Rakip"), r.get("TY Rakip Fiyat_fiyat"), r.get("TY Rakip Fiyat_link")),
             "Hepsiburada En Ucuz Rakip": rakip_hucre(r.get("HB En Ucuz Rakip"), r.get("HB Rakip Fiyat_fiyat"), r.get("HB Rakip Fiyat_link")),
             "Önerilen BuyBox Fiyatı": oneri_hucre(r.get("Önerilen BuyBox Fiyatı"), r.get("Tavsiye Fiyat"), fark_y),
@@ -356,7 +422,8 @@ def buybox_sayfasi():
     disa = ["Ürün Adı", "Ürün Kodu", "Alt Grup", "Tavsiye Fiyat", "TY En Ucuz Rakip", "TY Rakip Fiyat_fiyat",
             "HB En Ucuz Rakip", "HB Rakip Fiyat_fiyat", "En Ucuz Rakip Fiyat", "Önerilen BuyBox Fiyatı",
             "Fark (TL)", "Fark (%)", "Durum", "TY BuyBox Sahibi", "HB BuyBox Sahibi"]
-    ex = f[[c for c in disa if c in f.columns]].rename(columns={"TY Rakip Fiyat_fiyat": "TY Rakip Fiyat",
+    ex = f[[c for c in disa if c in f.columns]].rename(columns={"Tavsiye Fiyat": "TSF",
+                                                                "TY Rakip Fiyat_fiyat": "TY Rakip Fiyat",
                                                                 "HB Rakip Fiyat_fiyat": "HB Rakip Fiyat"})
     out = io.BytesIO()
     with pd.ExcelWriter(out, engine="openpyxl") as w:
