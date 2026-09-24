@@ -23,11 +23,11 @@ ESIK_YUZDE = 5          # Sarı ile kırmızı arasındaki sınır: TSF'nin %5't
 AKAKCE_GOSTER = True    # TSF sütununun altında Akakçe'deki piyasa en ucuz fiyatı yazsın mı (True / False)
 KANALLAR = ["Braunshop", "Trendyol", "Hepsiburada", "N11", "İdefix"]
 
-# Kanal logoları: sitelerin kendi sunucularında kullandıkları güncel, şeffaf logolar.
-# Adresi boş olan kanalda logo yerine adı yazar. Repoya aşağıdaki PLATFORM_LOGO_DOSYALARI adlarıyla
-# (örn. n11.png, idefix.png) dosya yüklersen, yüklediğin dosya bu adreslerin önüne geçer.
+# Kanal logoları. Trendyol ve Hepsiburada: sitelerin kendi sunucularındaki güncel, şeffaf logolar.
+# Adresi boş bırakılan kanalda tasarim.py'deki logo kullanılır (Braunshop: BAY, N11 ve İdefix: gönderdiğin logolar).
+# Repoya PLATFORM_LOGO_DOSYALARI adlarıyla (örn. braunshop.png) dosya yüklersen o dosya hepsinin önüne geçer.
 KANAL_LOGO_ADRESLERI = {
-    "Braunshop": "https://www.braunshop.com.tr/Data/EditorFiles/braunshop/footer-logo.svg",
+    "Braunshop": "",
     "Trendyol": "https://cdn.dsmcdn.com/sfweb-browsing/images/trendyol-logo_1761301016237.svg",
     "Hepsiburada": "https://images.hepsiburada.net/storefront/storefront/www/assets/images/hepsiburada.svg",
     "N11": "",
