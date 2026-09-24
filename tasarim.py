@@ -120,6 +120,38 @@ a.pt-link:hover .pt-cell { box-shadow:0 4px 12px rgba(20,70,45,.14); transform:t
                    background:#fff; padding:6px; border-radius:12px; box-shadow:0 10px 35px rgba(0,0,0,.25); transition:opacity .15s; }
 .pt-thumb .buyuk img { width:170px; height:170px; object-fit:contain; display:block; }
 .pt-thumb:hover .buyuk { visibility:visible; opacity:1; }
+/* [eklendi] Urun tablosu: beyaz kart (st.container key="pt_urun_tablosu") ve eski duzende tablo */
+.st-key-pt_urun_tablosu { background:#FFFFFF; border:1px solid #DCE9E1; border-radius:20px;
+                          box-shadow:0 6px 24px rgba(20,70,45,.06); padding:20px 22px 12px; }
+.pt-tablo { width:100%; border-collapse:separate; border-spacing:0; font-size:13px; color:#15261D; }
+.pt-tablo th { text-align:left; vertical-align:bottom; padding:10px 8px; border-bottom:1px solid #E6EEE9;
+               font-size:11px; font-weight:700; color:#6A7E72; letter-spacing:.06em; text-transform:uppercase; }
+.pt-tablo th small { display:block; font-size:11px; font-weight:500; color:#7A8C81; letter-spacing:0; text-transform:none; margin-top:2px; }
+.pt-tablo th.ch b { display:block; font-size:13px; font-weight:700; color:#15261D; letter-spacing:0; text-transform:none; }
+.pt-tablo th .logo { height:26px; display:flex; align-items:center; margin-bottom:4px; }
+.pt-tablo th .logo img, .pt-tablo th .logo svg { max-height:22px; max-width:112px; object-fit:contain; }
+.pt-tablo td { padding:8px; border-bottom:1px solid #EEF3F0; vertical-align:middle; }
+.pt-tablo tbody tr:last-child td { border-bottom:0; }
+.pt-tablo tbody tr:hover td { background:#FAFCFB; }
+.pt-bk { font-variant-numeric:tabular-nums; color:#3E4A44; white-space:nowrap; cursor:help; }
+.pt-grp { color:#52675A; }
+.pt-kod { position:relative; display:inline-block; font-weight:700; color:#10281B; white-space:nowrap; }
+.pt-kod.resimli { cursor:zoom-in; border-bottom:1px dotted #9FB5A8; }
+.pt-kod .buyuk { visibility:hidden; opacity:0; position:absolute; left:calc(100% + 12px); top:50%; transform:translateY(-50%);
+                 z-index:9999; background:#fff; padding:6px; border-radius:12px; border:1px solid #DCE9E1;
+                 box-shadow:0 10px 35px rgba(20,40,30,.25); transition:opacity .15s; }
+.pt-kod .buyuk img { width:170px; height:170px; object-fit:contain; display:block; }
+.pt-kod:hover .buyuk { visibility:visible; opacity:1; }
+.pt-ref { font-variant-numeric:tabular-nums; white-space:nowrap; color:#52675A; font-weight:600; }
+.pt-ref.aktif { color:#10281B; font-weight:800; }
+.pt-ref small { display:block; font-size:10.5px; font-weight:500; color:#7A8C81; }
+.pt-pill { display:inline-flex; flex-direction:column; gap:2px; padding:6px 10px; border-radius:10px; border:1px solid; min-width:94px; box-sizing:border-box; }
+.pt-pill .p { display:flex; align-items:center; gap:4px; font-size:14px; font-weight:700; white-space:nowrap; font-variant-numeric:tabular-nums; }
+.pt-pill .d { display:flex; align-items:center; justify-content:space-between; gap:6px; font-size:10.5px; font-weight:700; white-space:nowrap; }
+.pt-pill.pt-none { font-size:12px; padding:8px 10px; }
+a.pt-link .pt-pill { transition:box-shadow .15s, transform .15s; }
+a.pt-link:hover .pt-pill { box-shadow:0 4px 12px rgba(20,70,45,.14); transform:translateY(-1px); }
+.pt-alt-paneller { display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-top:20px; }
 .pt-row .tsf-alt { display:block; font-size:11px; font-weight:500; color:#6A7E72; margin-top:3px; line-height:1.35; }
 .bb { font-size:10px; font-weight:800; letter-spacing:.04em; padding:2px 6px; border-radius:6px; }
 .bb.own { background:#178A4E; color:#fff; }
@@ -359,7 +391,7 @@ def fiyat_tablosu(h: dict, filtre: str = "Tümü", not_: str = "") -> None:
     return len(satirlar)
 
 
-def yan_panel(h: dict) -> None:
+def _kanal_uyum_html(h: dict) -> str:
     satirlar = ""
     for k in KANALLAR:
         a = h["kanal"][k["ad"]]; n = max(a["n"], 1)
@@ -370,17 +402,126 @@ def yan_panel(h: dict) -> None:
                      f'<div class="pt-bar" style="height:8px"><div style="width:{okp}%;background:#1F9D57"></div>'
                      f'<div style="width:{wp}%;background:#E0A800"></div><div style="width:{bp}%;background:#D2402F"></div></div>'
                      f'<small class="num">{alt}</small></div>')
+    return f'<div class="pt-card pt-side"><h2>Kanal bazında uyum</h2>{satirlar}</div>'
+
+
+def _aksiyonlar_html(h: dict, ust_bosluk: bool = True) -> str:
     alarmlar = "".join(
         f'<div class="pt-alert"><div class="t">{html.escape(a["urun"])}<span class="num">−%{_pct(a["d"])}</span></div>'
         f'<small class="num">{html.escape(a["kanal"])} · {_fmt(a["fiyat"])} (TSF {_fmt(a["tsf"])})</small></div>'
         for a in h["alarmlar"][:4]) or '<small style="color:#6A7E72">Kritik sapma yok.</small>'
-    st.markdown(
-        f'<div class="pt-card pt-side"><h2>Kanal bazında uyum</h2>{satirlar}</div>'
-        f'<div class="pt-card pt-side" style="margin-top:20px;border-color:#F0D2CC">'
+    return (
+        f'<div class="pt-card pt-side" style="{"margin-top:20px;" if ust_bosluk else ""}border-color:#F0D2CC">'
         f'<div style="display:flex;justify-content:space-between;align-items:center"><h2>Öncelikli aksiyonlar</h2>'
         f'<span class="num" style="font-size:12px;font-weight:700;padding:3px 9px;border-radius:999px;background:#FDE6E2;color:#A3261A;white-space:nowrap">'
-        f'{h["tot"]["bad"]} kritik</span></div>{alarmlar}</div>',
+        f'{h["tot"]["bad"]} kritik</span></div>{alarmlar}</div>')
+
+
+def _hucre_klasik(c: dict, en_ucuz: bool = False) -> str:
+    """Kanal hücresi: fiyat, TSF'ye göre fark, BB rozeti, 🏆 (Trendyol/Hepsiburada en düşüğü)."""
+    if c["durum"] == "none":
+        return '<div class="pt-pill pt-none">Satışta yok</div>'
+    bb = ""
+    if c.get("bb") is True:
+        bb = '<span class="bb own">BB</span>'
+    elif c.get("bb") is False:
+        bb = '<span class="bb lost">BB</span>'
+    kupa = " 🏆" if en_ucuz else ""
+    if c["durum"] == "nt":
+        ic = (f'<div class="pt-pill pt-nt"><div class="p">{_fmt(c["fiyat"])}{kupa}</div>'
+              f'<div class="d"><span>TSF yok</span>{bb}</div></div>')
+    else:
+        d = c["d"]
+        fark = (("+%" + _pct(d)) if d > 0.001 else "TSF") if c["durum"] == "ok" else "−%" + _pct(d)
+        ic = (f'<div class="pt-pill pt-{c["durum"]}"><div class="p">{_IKON[c["durum"]]}{_fmt(c["fiyat"])}{kupa}</div>'
+              f'<div class="d"><span>{fark}</span>{bb}</div></div>')
+    link = str(c.get("link") or "")
+    if link.startswith("http"):
+        return f'<a class="pt-link" href="{html.escape(link, quote=True)}" target="_blank">{ic}</a>'
+    return ic
+
+
+def _ref_hucre(deger, aktif: bool, alt_yazi: str = "") -> str:
+    metin = _fmt(deger) if deger else "–"
+    alt = f"<small>{html.escape(alt_yazi)}</small>" if alt_yazi else ""
+    return f'<span class="pt-ref{" aktif" if aktif else ""}">{metin}{alt}</span>'
+
+
+def fiyat_tablosu_klasik(h: dict, filtre: str = "Tümü", not_: str = "", esik: float = 5,
+                         akakce_goster: bool = True) -> None:
+    """[eklendi] Eski panel düzeni: Barkod | Ürün Kodu (üzerine gelince görsel) | Alt Grup | TSF | Kampanya |
+    Akakçe | Braunshop ve pazar yerleri. Satır verisi hesapla() çıktısından gelir."""
+    satirlar = h["satirlar"]
+    if filtre == "Sapmalar":
+        satirlar = [r for r in satirlar if r["sapma"]]
+    elif filtre == "Buybox kaybı":
+        satirlar = [r for r in satirlar if r["bb_kayip"]]
+
+    kanal_adlari = [k["ad"] for k in KANALLAR]
+    sayilar = {k: sum(1 for r in satirlar if r["hucreler"][i]["durum"] != "none") for i, k in enumerate(kanal_adlari)}
+    bas = ('<th>Barkod</th><th>Ürün Kodu</th><th>Alt Grup</th><th>TSF</th>'
+           '<th>Kampanya Fiyatı<small>Hafta sonu</small></th>')
+    if akakce_goster:
+        bas += "<th>Akakçe<small>Piyasa en ucuzu</small></th>"
+    for k in KANALLAR:
+        logo = KANAL_LOGOLARI.get(k["ad"], "")
+        logo = f'<div class="logo">{logo}</div>' if logo else ""
+        bas += (f'<th class="ch">{logo}<b>{html.escape(k["ad"])}</b>'
+                f'<small>{k["tur"]} · {sayilar[k["ad"]]} ürün</small></th>')
+
+    govde = ""
+    for r in satirlar:
+        ad = html.escape(" ".join(str(r.get("tam_ad") or "").split()), quote=True)
+        g = str(r.get("gorsel") or "")
+        kod = html.escape(str(r.get("kod") or r.get("urun") or "-"))
+        if g.startswith("http"):
+            g = html.escape(g, quote=True)
+            kod_html = (f'<span class="pt-kod resimli" title="{ad}">{kod}<span class="buyuk">'
+                        f'<img src="{g}" referrerpolicy="no-referrer" loading="lazy"></span></span>')
+        else:
+            kod_html = f'<span class="pt-kod" title="{ad}">{kod}</span>'
+        tur = r.get("ref_turu", "")
+        tsf_alt = "Braunshop baz alındı" if tur == "braunshop" else ""
+        satir = (f'<td><span class="pt-bk" title="{ad}">{html.escape(str(r.get("barkod") or "-"))}</span></td>'
+                 f'<td>{kod_html}</td><td><span class="pt-grp">{html.escape(str(r.get("grup") or ""))}</span></td>'
+                 f'<td>{_ref_hucre(r.get("tsf_gercek"), tur == "tsf", tsf_alt)}</td>'
+                 f'<td>{_ref_hucre(r.get("kampanya"), tur == "kampanya")}</td>')
+        if akakce_goster:
+            ak = r.get("akakce")
+            if ak:
+                st_, d = durum(ak, r.get("tsf"), esik)
+                satir += "<td>" + _hucre_klasik({"durum": st_, "fiyat": ak, "d": d, "bb": None,
+                                                 "link": r.get("akakce_link")}) + "</td>"
+            else:
+                satir += '<td><span class="pt-ref">–</span></td>'
+        pazar = [c["fiyat"] for i, c in enumerate(r["hucreler"])
+                 if kanal_adlari[i] in ("Trendyol", "Hepsiburada") and c["fiyat"] is not None]
+        en_dusuk = min(pazar) if pazar else None
+        for i, c in enumerate(r["hucreler"]):
+            kupa = (kanal_adlari[i] in ("Trendyol", "Hepsiburada") and en_dusuk is not None
+                    and c["fiyat"] is not None and abs(c["fiyat"] - en_dusuk) < 0.01)
+            satir += f"<td>{_hucre_klasik(c, kupa)}</td>"
+        govde += f"<tr>{satir}</tr>"
+
+    st.markdown(
+        f'<table class="pt-tablo"><thead><tr>{bas}</tr></thead><tbody>{govde}</tbody></table>'
+        '<div class="pt-foot-note"><span><span class="bb own">BB</span> Buybox bizde</span>'
+        '<span><span class="bb lost" style="color:#5F6B64">BB</span> Buybox başka satıcıda</span>'
+        "<span>🏆 Trendyol/Hepsiburada en düşüğü</span>"
+        "<span>Kalın yazılı fiyat karşılaştırmada kullanılan fiyattır.</span>"
+        + (f"<span>{html.escape(not_)}</span>" if not_ else "") + "</div>",
         unsafe_allow_html=True)
+    return len(satirlar)
+
+
+def yan_panel(h: dict) -> None:
+    st.markdown(_kanal_uyum_html(h) + _aksiyonlar_html(h), unsafe_allow_html=True)
+
+
+def alt_paneller(h: dict) -> None:
+    """[eklendi] Kanal uyumu ve öncelikli aksiyonlar, tablonun altında yan yana."""
+    st.markdown(f'<div class="pt-alt-paneller">{_kanal_uyum_html(h)}{_aksiyonlar_html(h, ust_bosluk=False)}</div>',
+                unsafe_allow_html=True)
 
 
 def alt_bant() -> None:
@@ -405,10 +546,27 @@ def dashboard(satirlar: list[dict], son_tarama: str = "", esik: float = 5, tablo
     alt_bant()
 
 
-def govde(satirlar: list[dict], esik: float = 5, tablo_notu: str = "") -> None:
+def govde(satirlar: list[dict], esik: float = 5, tablo_notu: str = "", klasik: bool = False,
+          akakce_goster: bool = True) -> None:
     """[eklendi] Ust bant ve alt bant olmadan: KPI kartlari + fiyat tablosu + yan panel."""
     h = hesapla(satirlar, esik)
     kpi_kartlari(h, len(satirlar), esik)
+    if klasik:
+        with st.container(key="pt_urun_tablosu"):
+            a, b = st.columns([1.4, 1])
+            with a:
+                st.markdown('<div class="pt-table-head"><h2>Ürün bazlı fiyat görünümü</h2></div>', unsafe_allow_html=True)
+            with b:
+                secenekler = ["Tümü", "Sapmalar", "Buybox kaybı"]
+                if hasattr(st, "segmented_control"):
+                    filtre = st.segmented_control("Filtre", secenekler, default="Tümü",
+                                                  label_visibility="collapsed", key="pt_filtre") or "Tümü"
+                else:
+                    filtre = st.radio("Filtre", secenekler, horizontal=True,
+                                      label_visibility="collapsed", key="pt_filtre")
+            fiyat_tablosu_klasik(h, filtre, tablo_notu, esik, akakce_goster)
+        alt_paneller(h)
+        return
     sol, sag = st.columns([3.2, 1], gap="medium")
     with sol:
         with st.container(border=True):
