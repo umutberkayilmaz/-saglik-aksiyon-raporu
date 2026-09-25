@@ -15,6 +15,8 @@ st.set_page_config(page_title="Sağlık · Fiyat & Buybox", page_icon="📊", la
 GSHEET_NAME = "Saglik_Aksiyon_Guncel"
 GSHEET_WORKSHEET = "Guncel"
 BUYBOX_WORKSHEET = "BuyBox"
+DURUM_WORKSHEET = "Durum"             # ana script'in yazdigi platform tarama durumlari
+GECIKME_ESIGI_DK = 120                # son tarama bundan eskiyse panel uyari gosterir
 BUYUK_SAPMA_YUZDE = 15
 
 # ================= PANEL AYARLARI (buradan düzenleyebilirsin) =================
@@ -195,6 +197,41 @@ def aktif_referans(tsf, kampanya, braunshop):
     return (braunshop, "braunshop") if _dolu(braunshop) else (None, "")
 
 
+@st.cache_data(ttl=180)
+def load_durum():
+    """Platform -> {durum, son_basarili, aciklama, ...}. Sayfa yoksa bos (tum kanallar 'Tamam' sayilir)."""
+    client = get_gspread_client()
+    if not client:
+        return {}
+    try:
+        ws = client.open(GSHEET_NAME).worksheet(DURUM_WORKSHEET)
+        values = ws.get_all_values()
+    except Exception:
+        return {}
+    if not values or len(values) < 2:
+        return {}
+    h = [str(x).strip() for x in values[0]]
+    sonuc = {}
+    for satir in values[1:]:
+        d = dict(zip(h, satir))
+        ad = str(d.get("Platform", "")).strip()
+        if ad:
+            sonuc[ad] = {"durum": str(d.get("Durum", "Tamam")).strip() or "Tamam",
+                         "son_basarili": str(d.get("Son Başarılı Tarama", "")).strip(),
+                         "aciklama": str(d.get("Açıklama", "")).strip()}
+    return sonuc
+
+
+def tarama_yasi_dk(guncelleme_metni):
+    """'Son Güncelleme: 24.09.2026 12:05' -> kac dakika once (Turkiye saati). Okunamazsa None."""
+    try:
+        t = datetime.strptime(guncelleme_metni.replace("Son Güncelleme:", "").strip(), "%d.%m.%Y %H:%M")
+    except (ValueError, AttributeError):
+        return None
+    simdi = (datetime.now(timezone.utc) + timedelta(hours=3)).replace(tzinfo=None)
+    return max(0, (simdi - t).total_seconds() / 60)
+
+
 # ================= FİYAT & BUYBOX SEKMESİ (Design tasarımı) =================
 def _sayi(v):
     if v is None or v == "" or (isinstance(v, float) and pd.isna(v)):
@@ -296,8 +333,10 @@ def _excel_verisi(satirlar):
     return out.getvalue()
 
 
-def fiyat_buybox_sayfasi(df):
+def fiyat_buybox_sayfasi(df, yas_dk=None):
     tasarim.baslik(ESIK_YUZDE)
+    kanal_durumu = load_durum()
+    tasarim.veri_uyarilari(kanal_durumu, yas_dk, GECIKME_ESIGI_DK)
     if df is None or df.empty:
         st.warning("Veri bulunamadı. Google Sheets bağlantısını ve sayfa adını kontrol edin.")
         return
@@ -325,7 +364,8 @@ def fiyat_buybox_sayfasi(df):
             if bb_zaman else "BB bilgisi perşembe BuyBox taramasından sonra görünür.")
     if hafta_sonu_mu():
         notu += " Hafta sonu: kampanya fiyatı girilmiş ürünler kampanya fiyatına göre karşılaştırılır."
-    tasarim.govde(satirlar, ESIK_YUZDE, tablo_notu=notu, klasik=True, akakce_goster=AKAKCE_GOSTER)
+    tasarim.govde(satirlar, ESIK_YUZDE, tablo_notu=notu, klasik=True, akakce_goster=AKAKCE_GOSTER,
+                  kanal_durumu=kanal_durumu)
 
 
 # ================= BUYBOX SEKMESİ =================
@@ -404,6 +444,8 @@ def bb_donustur(df, gorsel_map, barkod_map):
             "tsf": _sayi(r.get("Tavsiye Fiyat")), "ty": rakip("TY"), "hb": rakip("HB"),
             "oneri": _sayi(r.get("Önerilen BuyBox Fiyatı")), "durum": durum,
             "fark_tl": _sayi(r.get("Fark (TL)")), "fark_yuzde": fark_y,
+            "ty_okuma": str(r.get("TY Okuma", "") or "").strip(),
+            "hb_okuma": str(r.get("HB Okuma", "") or "").strip(),
             "ty_bb": str(r.get("TY BuyBox Sahibi", "") or "").strip(),
             "hb_bb": str(r.get("HB BuyBox Sahibi", "") or "").strip(),
             "inilecek": inilecek, "buyuk": inilecek and fark_y is not None and fark_y <= -BUYUK_SAPMA_YUZDE,
@@ -479,10 +521,11 @@ for _kanal in KANALLAR:
 
 _df_fiyat, _guncelleme = load_data()
 _son = _guncelleme.replace("Son Güncelleme:", "").strip().replace(" ", " · ", 1) if _guncelleme else ""
-tasarim.ust_bant(_son)
+_yas = tarama_yasi_dk(_guncelleme)
+tasarim.ust_bant(_son, canli=(_yas is None or _yas <= GECIKME_ESIGI_DK))
 sekme_fiyat, sekme_buybox = st.tabs(["📊 Fiyat & Buybox Takibi", "🛒 BuyBox Önerisi"])
 with sekme_fiyat:
-    fiyat_buybox_sayfasi(_df_fiyat)
+    fiyat_buybox_sayfasi(_df_fiyat, _yas)
 with sekme_buybox:
     buybox_sayfasi()
 tasarim.alt_bant()
