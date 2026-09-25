@@ -174,6 +174,16 @@ table.pt-tablo tbody tr:hover td { background:#FAFCFB; }
 .pt-pill .bb { font-size:9px; line-height:13px; padding:0 3px; border-radius:4px; }
 .pt-pill .kupa { font-size:11px; }
 .pt-yok { color:#A7B4AC; font-weight:600; cursor:help; }
+/* [eklendi] "veri alinamadi" ile "satista yok" ayrimi */
+.pt-veriyok { display:inline-block; min-width:22px; padding:1px 8px; border-radius:999px; background:#FFF1E6; color:#B4531A;
+              font-weight:800; font-size:12px; cursor:help; border:1px dashed #F0B48A; line-height:1.45; }
+.pt-pill.eski { outline:1.5px dashed rgba(127,83,0,.55); outline-offset:1px; opacity:.8; }
+.pt-kanal-uyari { display:inline-block; margin-top:4px; font-size:10px; font-weight:800; padding:1px 7px; border-radius:999px;
+                  text-transform:none; letter-spacing:0; white-space:nowrap; }
+.pt-kanal-uyari.eski { background:#FFF5DA; color:#7F5300; }
+.pt-kanal-uyari.yok { background:#FDE6E2; color:#A3261A; }
+.pt-bant ul { margin:4px 0 0 0; padding-left:18px; }
+.pt-bant li { margin:1px 0; }
 a.pt-link { text-decoration:none !important; }
 a.pt-link .pt-pill { transition:box-shadow .15s, transform .15s; }
 a.pt-link:hover .pt-pill { box-shadow:0 3px 10px rgba(20,70,45,.16); transform:translateY(-1px); }
@@ -290,8 +300,16 @@ _IKON = {
 }
 
 
-def ust_bant(son_tarama: str = "") -> None:
+def ust_bant(son_tarama: str = "", canli: bool = True) -> None:
     """Animasyonlu EKG + Sistem 40. Yıl + logo (ortada), sağda canlı takip ve son tarama."""
+    if canli:
+        rozet = ('<div style="display:flex;align-items:center;gap:8px;padding:7px 13px;background:#E4F4EA;border-radius:999px;'
+                 'font-size:13px;font-weight:700;color:#0F5E35;white-space:nowrap"><span class="live-dot" style="width:8px;height:8px;'
+                 'border-radius:50%;background:#178A4E"></span>Canlı takip</div>')
+    else:
+        rozet = ('<div style="display:flex;align-items:center;gap:8px;padding:7px 13px;background:#FFF5DA;border-radius:999px;'
+                 'font-size:13px;font-weight:700;color:#7F5300;white-space:nowrap"><span style="width:8px;height:8px;border-radius:50%;'
+                 'background:#D08A00"></span>Tarama gecikti</div>')
     doc = f"""<!doctype html><html lang="tr"><head><meta charset="utf-8">
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
 <style>
@@ -310,12 +328,11 @@ circle{{transform-box:fill-box;transform-origin:center}}
   <div class="ecg-head" style="display:flex;align-items:center;justify-content:center">
     {_HEADER_SVG}
   </div>
-  <div style="display:flex;align-items:center;gap:16px;justify-self:end">
-    <div style="display:flex;align-items:center;gap:8px;padding:8px 14px;background:#E4F4EA;border-radius:999px;font-size:13px;font-weight:700;color:#0F5E35">
-      <span class="live-dot" style="width:8px;height:8px;border-radius:50%;background:#178A4E"></span>Canlı takip</div>
+  <div style="display:flex;align-items:center;gap:12px;justify-self:end">
+    {rozet}
     <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px">
       <span style="font-size:11px;font-weight:600;color:#6A7E72;letter-spacing:.06em;text-transform:uppercase">Son tarama</span>
-      <span style="font-size:14px;font-weight:700;color:#15261D">{html.escape(son_tarama)}</span>
+      <span style="font-size:14px;font-weight:700;color:#15261D;white-space:nowrap">{html.escape(son_tarama)}</span>
     </div>
   </div>
 </div></body></html>"""
@@ -465,9 +482,11 @@ def _fmt2(v) -> str:
     return f"{v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") + " ₺"
 
 
-def _hucre_klasik(c: dict, en_ucuz: bool = False) -> str:
+def _hucre_klasik(c: dict, en_ucuz: bool = False, eski: str = "", veri_yok: str = "") -> str:
     """Kompakt kanal hücresi: fiyat, minik BB rozeti ve 🏆; TSF farkı üzerine gelince görünür."""
     if c["durum"] == "none":
+        if veri_yok:
+            return f'<span class="pt-veriyok" title="{html.escape(veri_yok, quote=True)}">?</span>'
         return '<span class="pt-yok" title="Satışta yok / liste dışı">–</span>'
     bb = ""
     if c.get("bb") is True:
@@ -481,7 +500,10 @@ def _hucre_klasik(c: dict, en_ucuz: bool = False) -> str:
         ipucu = "TSF ile aynı" if c["d"] <= 0.001 else f"TSF'nin %{_pct(c['d'])} üstünde"
     else:
         ipucu = f"TSF'nin %{_pct(c['d'])} altında"
-    ic = f'<span class="pt-pill pt-{c["durum"]}" title="{ipucu}">{_fmt2(c["fiyat"])}{kupa}{bb}</span>'
+    if eski:
+        ipucu += f" · Eski veri: son başarılı tarama {eski}"
+    ic = (f'<span class="pt-pill pt-{c["durum"]}{" eski" if eski else ""}" title="{html.escape(ipucu, quote=True)}">'
+          f'{_fmt2(c["fiyat"])}{kupa}{bb}</span>')
     link = str(c.get("link") or "")
     if link.startswith("http"):
         return f'<a class="pt-link" href="{html.escape(link, quote=True)}" target="_blank">{ic}</a>'
@@ -506,8 +528,48 @@ def _ref_hucre(deger, aktif: bool, alt_yazi: str = "") -> str:
     return f'<span class="pt-ref{" aktif" if aktif else ""}">{metin}{alt}</span>'
 
 
+def _kanal_durum_bilgisi(kanal_durumu, ad):
+    """(eski_tarih, veri_yok_ipucu, baslik_rozeti) dondurur."""
+    d = (kanal_durumu or {}).get(ad) or {}
+    durum_ = d.get("durum", "Tamam")
+    if durum_ == "Eski veri":
+        t = d.get("son_basarili", "")
+        return (t or "?", "Son taramada veri alınamadı; bu ürün son başarılı taramada da yoktu",
+                f'<br><span class="pt-kanal-uyari eski" title="{html.escape(d.get("aciklama", ""), quote=True)}">'
+                f'⚠ Eski veri · {html.escape(t[-5:] if t else "")}</span>')
+    if durum_ == "Veri alınamadı":
+        return ("", "Bu kanaldan veri alınamadı; satışta olmadığı anlamına gelmez",
+                f'<br><span class="pt-kanal-uyari yok" title="{html.escape(d.get("aciklama", ""), quote=True)}">'
+                f'⚠ Veri alınamadı</span>')
+    return ("", "", "")
+
+
+def veri_uyarilari(kanal_durumu, son_tarama_yasi_dk=None, gecikme_esigi_dk: int = 120) -> None:
+    """[eklendi] Tablonun ustunde: gecikmis tarama ve sorunlu kanallar icin aciklama bandi."""
+    if son_tarama_yasi_dk is not None and son_tarama_yasi_dk > gecikme_esigi_dk:
+        saat, dk = divmod(int(son_tarama_yasi_dk), 60)
+        sure = (f"{saat} saat {dk} dakika" if saat else f"{dk} dakika")
+        st.markdown(f'<div class="pt-bant uyari"><span class="ik">⏱️</span><div><b>Son tarama {sure} önce yapıldı.</b> '
+                    "Tarama bilgisayarı kapalı olabilir ya da zamanlanmış görev çalışmıyor olabilir; "
+                    "aşağıdaki fiyatlar son taramanın verisidir.</div></div>", unsafe_allow_html=True)
+    sorunlu = [(ad, d) for ad, d in (kanal_durumu or {}).items() if d.get("durum") in ("Eski veri", "Veri alınamadı")]
+    if sorunlu:
+        maddeler = ""
+        for ad, d in sorunlu:
+            neden = html.escape(d.get("aciklama") or "")
+            if d["durum"] == "Eski veri":
+                maddeler += (f"<li><b>{html.escape(ad)}:</b> son taramada güncel veri alınamadı ({neden}). "
+                             f"Sütunda {html.escape(d.get('son_basarili', ''))} tarihli son başarılı veri, kesikli "
+                             "çerçeveyle gösteriliyor.</li>")
+            else:
+                maddeler += (f"<li><b>{html.escape(ad)}:</b> veri alınamadı ({neden}). Bu sütundaki <b>?</b> işaretleri "
+                             "ürünün satışta olmadığı anlamına gelmez.</li>")
+        st.markdown(f'<div class="pt-bant uyari"><span class="ik">⚠️</span><div><b>Bazı kanallardan güncel veri '
+                    f"alınamadı.</b><ul>{maddeler}</ul></div></div>", unsafe_allow_html=True)
+
+
 def fiyat_tablosu_klasik(h: dict, filtre: str = "Tümü", not_: str = "", esik: float = 5,
-                         akakce_goster: bool = True) -> None:
+                         akakce_goster: bool = True, kanal_durumu: dict | None = None) -> None:
     """[eklendi] Eski panel düzeni: Barkod | Ürün Kodu (üzerine gelince görsel) | Alt Grup | TSF | Kampanya |
     Akakçe | Braunshop ve pazar yerleri. Satır verisi hesapla() çıktısından gelir."""
     satirlar = h["satirlar"]
@@ -521,13 +583,17 @@ def fiyat_tablosu_klasik(h: dict, filtre: str = "Tümü", not_: str = "", esik: 
     sayilar = {k: sum(1 for r in satirlar if r["hucreler"][i]["durum"] != "none") for i, k in enumerate(kanal_adlari)}
     bas = ('<th>Barkod</th><th>Ürün Kodu</th><th>Alt Grup</th><th>TSF</th>'
            '<th>Kampanya Fiyatı<small>Hafta sonu</small></th>')
+    ak_eski, ak_veriyok, ak_rozet = _kanal_durum_bilgisi(kanal_durumu, "Akakçe")
     if akakce_goster:
-        bas += f'<th title="Akakçe · piyasadaki en ucuz fiyat">Akakçe<small>{akakce_sayi} Ürün</small></th>'
+        ak_sayi = "?" if ak_veriyok and not ak_eski else akakce_sayi
+        bas += f'<th title="Akakçe · piyasadaki en ucuz fiyat">Akakçe<small>{ak_sayi} Ürün</small>{ak_rozet}</th>'
     for k in KANALLAR:
         logo = KANAL_LOGOLARI.get(k["ad"], "")
         ipucu = html.escape(f'{k["ad"]} · {k["tur"]} · {sayilar[k["ad"]]} ürün', quote=True)
         icerik = f'<div class="logo">{logo}</div>' if logo else f'<b>{html.escape(k["ad"])}</b>'
-        bas += f'<th class="ch" title="{ipucu}">{icerik}<small>{sayilar[k["ad"]]} Ürün</small></th>'
+        k_eski, k_veriyok, k_rozet = _kanal_durum_bilgisi(kanal_durumu, k["ad"])
+        k_sayi = "?" if k_veriyok and not k_eski else sayilar[k["ad"]]
+        bas += f'<th class="ch" title="{ipucu}">{icerik}<small>{k_sayi} Ürün</small>{k_rozet}</th>'
 
     govde = ""
     for r in satirlar:
@@ -544,7 +610,9 @@ def fiyat_tablosu_klasik(h: dict, filtre: str = "Tümü", not_: str = "", esik: 
             if ak:
                 st_, d = durum(ak, r.get("tsf"), esik)
                 satir += "<td>" + _hucre_klasik({"durum": st_, "fiyat": ak, "d": d, "bb": None,
-                                                 "link": r.get("akakce_link")}) + "</td>"
+                                                 "link": r.get("akakce_link")}, eski=ak_eski) + "</td>"
+            elif ak_veriyok and not ak_eski:
+                satir += f'<td><span class="pt-veriyok" title="{html.escape(ak_veriyok, quote=True)}">?</span></td>'
             else:
                 satir += '<td><span class="pt-ref">–</span></td>'
         pazar = [c["fiyat"] for i, c in enumerate(r["hucreler"])
@@ -553,7 +621,8 @@ def fiyat_tablosu_klasik(h: dict, filtre: str = "Tümü", not_: str = "", esik: 
         for i, c in enumerate(r["hucreler"]):
             kupa = (kanal_adlari[i] in ("Trendyol", "Hepsiburada") and en_dusuk is not None
                     and c["fiyat"] is not None and abs(c["fiyat"] - en_dusuk) < 0.01)
-            satir += f"<td>{_hucre_klasik(c, kupa)}</td>"
+            k_eski, k_veriyok, _ = _kanal_durum_bilgisi(kanal_durumu, kanal_adlari[i])
+            satir += f"<td>{_hucre_klasik(c, kupa, eski=k_eski, veri_yok=(k_veriyok if not k_eski else ''))}</td>"
         govde += f"<tr>{satir}</tr>"
 
     st.markdown(
@@ -561,6 +630,8 @@ def fiyat_tablosu_klasik(h: dict, filtre: str = "Tümü", not_: str = "", esik: 
         '<div class="pt-foot-note"><span><span class="bb own">BB</span> Buybox bizde</span>'
         '<span><span class="bb lost" style="color:#5F6B64">BB</span> Buybox başka satıcıda</span>'
         "<span>🏆 Trendyol/Hepsiburada en düşüğü</span>"
+        '<span><b style="color:#A7B4AC">–</b> satışta yok · <span class="pt-veriyok">?</span> veri alınamadı · '
+        '<span class="pt-pill pt-ok eski" style="padding:0 6px">kesikli</span> eski veri</span>'
         "<span>Kalın yazılı fiyat karşılaştırmada kullanılan fiyattır; TSF'ye göre farkı görmek için fiyatın üzerine gelin.</span>"
         + (f"<span>{html.escape(not_)}</span>" if not_ else "") + "</div>",
         unsafe_allow_html=True)
@@ -618,9 +689,13 @@ def _braun_mu(sahip) -> bool:
     return " ".join(str(sahip or "").split()).casefold() == "braun shop"
 
 
-def _rakip_hucre(rakip, tsf, esik: float) -> str:
+def _rakip_hucre(rakip, tsf, esik: float, okuma: str = "") -> str:
+    if okuma == "Okunamadı":
+        return '<span class="pt-veriyok" title="Ürün sayfası okunamadı; rakip olmadığı anlamına gelmez">?</span>'
     if not rakip or rakip.get("fiyat") is None:
-        return '<span class="pt-yok" title="Rakip bulunamadı">–</span>'
+        ipucu = ("Braun Shop dışında stokta rakip yok" if okuma == "Tamam"
+                 else "Bu platform için ürün kodu girilmemiş")
+        return f'<span class="pt-yok" title="{ipucu}">–</span>'
     st_, d = durum(rakip["fiyat"], tsf, esik)
     pill = _hucre_klasik({"durum": st_, "fiyat": rakip["fiyat"], "d": d, "bb": None, "link": rakip.get("link")})
     ad = html.escape(str(rakip.get("ad") or ""))
@@ -629,6 +704,8 @@ def _rakip_hucre(rakip, tsf, esik: float) -> str:
 
 def _oneri_hucre(r: dict) -> str:
     oneri = r.get("oneri")
+    if r.get("durum") == "Veri okunamadı":
+        return '<span class="pt-veriyok" title="Trendyol ve Hepsiburada sayfaları okunamadı">?</span>'
     if oneri is None:
         return '<span class="pt-yok">–</span>'
     ipucu = html.escape(str(r.get("durum") or ""), quote=True)
@@ -685,14 +762,15 @@ def buybox_tablosu(satirlar: list[dict], filtre: str = "Tümü", not_: str = "",
                   f"<td>{_kod_html(r)}</td>"
                   f'<td><span class="pt-grp">{html.escape(str(r.get("grup") or ""))}</span></td>'
                   f'<td>{_ref_hucre(r.get("tsf"), True)}</td>'
-                  f'<td>{_rakip_hucre(r.get("ty"), r.get("tsf"), esik)}</td>'
-                  f'<td>{_rakip_hucre(r.get("hb"), r.get("tsf"), esik)}</td>'
+                  f'<td>{_rakip_hucre(r.get("ty"), r.get("tsf"), esik, r.get("ty_okuma", ""))}</td>'
+                  f'<td>{_rakip_hucre(r.get("hb"), r.get("tsf"), esik, r.get("hb_okuma", ""))}</td>'
                   f"<td>{_oneri_hucre(r)}</td><td>{_fark_hucre(r)}</td><td>{_bb_sahip_hucre(r)}</td></tr>")
     st.markdown(
         f'<table class="pt-tablo" lang="tr"><thead><tr>{bas}</tr></thead><tbody>{govde}</tbody></table>'
         '<div class="pt-foot-note"><span>Rakip fiyatının rengi TSF\'ye göre durumunu gösterir; fiyata tıklayınca rakibin ilanı açılır.</span>'
         f"<span>⚠️ TSF'nin %{buyuk_esik:g} veya daha fazla altında öneri</span>"
         "<span>Önerinin durumunu görmek için fiyatın üzerine gelin.</span>"
+        '<span><b style="color:#A7B4AC">–</b> rakip yok · <span class="pt-veriyok">?</span> sayfa okunamadı</span>'
         + (f"<span>{html.escape(not_)}</span>" if not_ else "") + "</div>",
         unsafe_allow_html=True)
 
@@ -746,7 +824,7 @@ def dashboard(satirlar: list[dict], son_tarama: str = "", esik: float = 5, tablo
 
 
 def govde(satirlar: list[dict], esik: float = 5, tablo_notu: str = "", klasik: bool = False,
-          akakce_goster: bool = True) -> None:
+          akakce_goster: bool = True, kanal_durumu: dict | None = None) -> None:
     """[eklendi] Ust bant ve alt bant olmadan: KPI kartlari + fiyat tablosu + yan panel."""
     h = hesapla(satirlar, esik)
     kpi_kartlari(h, len(satirlar), esik)
@@ -763,7 +841,7 @@ def govde(satirlar: list[dict], esik: float = 5, tablo_notu: str = "", klasik: b
                 else:
                     filtre = st.radio("Filtre", secenekler, horizontal=True,
                                       label_visibility="collapsed", key="pt_filtre")
-            fiyat_tablosu_klasik(h, filtre, tablo_notu, esik, akakce_goster)
+            fiyat_tablosu_klasik(h, filtre, tablo_notu, esik, akakce_goster, kanal_durumu)
         alt_paneller(h)
         return
     sol, sag = st.columns([3.2, 1], gap="medium")
