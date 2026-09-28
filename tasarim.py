@@ -203,6 +203,19 @@ a.pt-link:hover .pt-pill { box-shadow:0 3px 10px rgba(20,70,45,.16); transform:t
 .pt-bbs { font-size:11.5px; white-space:nowrap; color:#3E4A44; line-height:1.7; }
 .pt-bbs .pl { display:inline-block; min-width:22px; font-size:9.5px; font-weight:800; color:#8A9A90; letter-spacing:.04em; margin-right:4px; }
 .pt-bbs.bizde { color:#166B3D; font-weight:700; }
+/* [eklendi] BuyBox sirasi hucresi */
+.pt-bbl-kutu { display:inline-flex; flex-direction:column; min-width:190px; text-align:left; }
+.pt-bbl { display:grid; grid-template-columns:14px minmax(0,1fr) auto; column-gap:7px; align-items:center;
+          font-size:11.5px; line-height:1.6; color:#3E4A44; white-space:nowrap; }
+.pt-bbl .no { font-size:9.5px; font-weight:800; color:#9AA8A0; text-align:right; }
+.pt-bbl .ad { overflow:hidden; text-overflow:ellipsis; }
+.pt-bbl .f { font-weight:700; font-variant-numeric:tabular-nums; }
+.pt-bbl.ilk .ad, .pt-bbl.ilk .f { color:#10281B; font-weight:800; }
+.pt-bbl.braun .ad, .pt-bbl.braun .f, .pt-bbl.braun .no { color:#166B3D; font-weight:800; }
+.pt-bbl .ucuz { font-size:8.5px; font-weight:800; color:#52675A; background:#EEF3F0; border-radius:4px; padding:0 4px;
+                margin-left:5px; letter-spacing:.02em; }
+.pt-bbl a { color:inherit !important; text-decoration:none !important; border-bottom:1px dotted #9FB5A8; }
+.pt-bbl-ayrac { border-top:1px dashed #E1EAE4; margin:2px 0 1px; }
 .pt-alt-paneller { display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-top:20px; }
 .pt-row .tsf-alt { display:block; font-size:11px; font-weight:500; color:#6A7E72; margin-top:3px; line-height:1.35; }
 .bb { font-size:10px; font-weight:800; letter-spacing:.04em; padding:2px 6px; border-radius:6px; }
@@ -702,6 +715,66 @@ def _rakip_hucre(rakip, tsf, esik: float, okuma: str = "") -> str:
     return f'{pill}<span class="pt-rakip-ad" title="{ad}">{ad}</span>'
 
 
+def _bb_sira_hucre(sira, rakip, okuma: str = "", sahip: str = "") -> str:
+    """Buybox sırası: ilk 3 satıcı + fiyat; Braun Shop yeşil (ilk 3'te değilse kaçıncı sırada olduğu);
+    önerinin dayandığı en ucuz rakip 'en ucuz' etiketiyle."""
+    if okuma == "Okunamadı":
+        return '<span class="pt-veriyok" title="Ürün sayfası okunamadı; satıcı olmadığı anlamına gelmez">?</span>'
+    ilk = (sira or {}).get("ilk") or []
+    if not ilk:
+        if rakip and rakip.get("fiyat") is not None:     # eski veri: sadece en ucuz rakip ve buybox sahibi
+            ad = html.escape(str(rakip.get("ad") or ""))
+            sat = (f'<div class="pt-bbl"><span class="no"></span><span class="ad">{ad}<span class="ucuz">EN UCUZ</span></span>'
+                   f'<span class="f">{_fmt2(rakip["fiyat"])}</span></div>')
+            if sahip:
+                sat = (f'<div class="pt-bbl ilk"><span class="no">1</span><span class="ad">{html.escape(sahip)}</span>'
+                       f'<span class="f"></span></div>') + sat
+            return f'<div class="pt-bbl-kutu">{sat}</div>'
+        if sahip:                                          # eski veri: sadece buybox sahibi biliniyor
+            braun = " ".join(sahip.split()).casefold() == "braun shop"
+            return (f'<div class="pt-bbl-kutu"><div class="pt-bbl {"braun" if braun else "ilk"}" title="Buybox bu satıcıda">'
+                    f'<span class="no">1</span><span class="ad">{html.escape(sahip)}{" ✓" if braun else ""}</span>'
+                    f'<span class="f"></span></div></div>')
+        ipucu = "Braun Shop dışında stokta satıcı yok" if okuma == "Tamam" else "Bu platform için ürün kodu girilmemiş"
+        return f'<span class="pt-yok" title="{ipucu}">–</span>'
+
+    ucuz_ad = str((rakip or {}).get("ad") or "")
+    ucuz_fiyat = (rakip or {}).get("fiyat")
+    link = str((rakip or {}).get("link") or "")
+    satirlar_, ucuz_gosterildi = "", False
+    for i, x in enumerate(ilk, 1):
+        ad_ham = str(x.get("ad") or "")
+        ad = html.escape(ad_ham)
+        sinif = "pt-bbl" + (" braun" if x.get("braun") else (" ilk" if i == 1 else ""))
+        etiket = ""
+        if (not x.get("braun") and not ucuz_gosterildi and ad_ham == ucuz_ad and ucuz_fiyat is not None
+                and abs(float(x.get("fiyat") or 0) - ucuz_fiyat) < 0.01):
+            ucuz_gosterildi = True
+            etiket = '<span class="ucuz" title="Önerilen BuyBox fiyatı bu rakibe göre hesaplandı">EN UCUZ</span>'
+            if link.startswith("http"):
+                ad = f'<a href="{html.escape(link, quote=True)}" target="_blank" title="Rakibin ilanını aç">{ad}</a>'
+        ipucu = "Buybox bu satıcıda" if i == 1 else f"Buybox sırasında {i}."
+        satirlar_ += (f'<div class="{sinif}" title="{ipucu}"><span class="no">{i}</span><span class="ad">{ad}'
+                      f'{" ✓" if x.get("braun") else ""}{etiket}</span><span class="f">{_fmt2(float(x["fiyat"]))}</span></div>')
+    ek = ""
+    if ucuz_ad and ucuz_fiyat is not None and not ucuz_gosterildi:
+        ad = html.escape(ucuz_ad)
+        if link.startswith("http"):
+            ad = f'<a href="{html.escape(link, quote=True)}" target="_blank" title="Rakibin ilanını aç">{ad}</a>'
+        ek += (f'<div class="pt-bbl"><span class="no">·</span><span class="ad">{ad}<span class="ucuz">EN UCUZ</span></span>'
+               f'<span class="f">{_fmt2(ucuz_fiyat)}</span></div>')
+    bs, bf, top = sira.get("braun_sira"), sira.get("braun_fiyat"), sira.get("toplam")
+    if bs and bs > len(ilk):
+        ek += (f'<div class="pt-bbl braun" title="Braun Shop buybox sırasında {bs}. ({top} satıcı arasında)">'
+               f'<span class="no">{bs}</span><span class="ad">Braun Shop</span>'
+               f'<span class="f">{_fmt2(float(bf)) if bf else "–"}</span></div>')
+    elif not bs:
+        ek += ('<div class="pt-bbl" title="Braun Shop bu üründe stokta değil ya da listelemiyor">'
+               '<span class="no">–</span><span class="ad" style="color:#9AA8A0">Braun Shop yok</span><span class="f"></span></div>')
+    ayrac = '<div class="pt-bbl-ayrac"></div>' if ek else ""
+    return f'<div class="pt-bbl-kutu">{satirlar_}{ayrac}{ek}</div>'
+
+
 def _oneri_hucre(r: dict) -> str:
     oneri = r.get("oneri")
     if r.get("durum") == "Veri okunamadı":
@@ -749,11 +822,11 @@ def buybox_tablosu(satirlar: list[dict], filtre: str = "Tümü", not_: str = "",
     def logo_bas(ad):
         logo = KANAL_LOGOLARI.get(ad, "")
         ic = f'<div class="logo">{logo}</div>' if logo else f"<b>{html.escape(ad)}</b>"
-        return f'<th class="ch" title="{ad} · Braun Shop dışındaki en ucuz stoklu rakip">{ic}<small>En ucuz rakip</small></th>'
+        return (f'<th class="ch" title="{ad} · buybox sırasındaki ilk {3} satıcı ve fiyatları">{ic}'
+                f'<small>BuyBox sırası</small></th>')
 
     bas = ("<th>Barkod</th><th>Ürün Kodu</th><th>Alt Grup</th><th>TSF</th>" + logo_bas("Trendyol") + logo_bas("Hepsiburada")
-           + "<th>Önerilen<small>BuyBox fiyatı</small></th><th>Fark<small>TSF'ye göre</small></th>"
-           + "<th>BuyBox sahibi<small>Şu an</small></th>")
+           + "<th>Önerilen<small>BuyBox fiyatı</small></th><th>Fark<small>TSF'ye göre</small></th>")
     govde = ""
     for r in satirlar:
         ad = html.escape(" ".join(str(r.get("tam_ad") or "").split()), quote=True)
@@ -762,15 +835,16 @@ def buybox_tablosu(satirlar: list[dict], filtre: str = "Tümü", not_: str = "",
                   f"<td>{_kod_html(r)}</td>"
                   f'<td><span class="pt-grp">{html.escape(str(r.get("grup") or ""))}</span></td>'
                   f'<td>{_ref_hucre(r.get("tsf"), True)}</td>'
-                  f'<td>{_rakip_hucre(r.get("ty"), r.get("tsf"), esik, r.get("ty_okuma", ""))}</td>'
-                  f'<td>{_rakip_hucre(r.get("hb"), r.get("tsf"), esik, r.get("hb_okuma", ""))}</td>'
-                  f"<td>{_oneri_hucre(r)}</td><td>{_fark_hucre(r)}</td><td>{_bb_sahip_hucre(r)}</td></tr>")
+                  f'<td>{_bb_sira_hucre(r.get("ty_sira"), r.get("ty"), r.get("ty_okuma", ""), r.get("ty_bb", ""))}</td>'
+                  f'<td>{_bb_sira_hucre(r.get("hb_sira"), r.get("hb"), r.get("hb_okuma", ""), r.get("hb_bb", ""))}</td>'
+                  f"<td>{_oneri_hucre(r)}</td><td>{_fark_hucre(r)}</td></tr>")
     st.markdown(
         f'<table class="pt-tablo" lang="tr"><thead><tr>{bas}</tr></thead><tbody>{govde}</tbody></table>'
-        '<div class="pt-foot-note"><span>Rakip fiyatının rengi TSF\'ye göre durumunu gösterir; fiyata tıklayınca rakibin ilanı açılır.</span>'
+        '<div class="pt-foot-note"><span>BuyBox sırasında 1. satıcı buybox\'ı tutuyor; Braun Shop yeşil ✓. '
+        '"EN UCUZ" etiketi önerinin dayandığı rakip, adına tıklayınca ilanı açılır.</span>'
         f"<span>⚠️ TSF'nin %{buyuk_esik:g} veya daha fazla altında öneri</span>"
         "<span>Önerinin durumunu görmek için fiyatın üzerine gelin.</span>"
-        '<span><b style="color:#A7B4AC">–</b> rakip yok · <span class="pt-veriyok">?</span> sayfa okunamadı</span>'
+        '<span><b style="color:#A7B4AC">–</b> satıcı yok · <span class="pt-veriyok">?</span> sayfa okunamadı</span>'
         + (f"<span>{html.escape(not_)}</span>" if not_ else "") + "</div>",
         unsafe_allow_html=True)
 
