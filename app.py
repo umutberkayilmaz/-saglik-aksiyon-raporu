@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import re
 import io
+import json
 import os
 import base64
 from datetime import datetime, timedelta, timezone
@@ -418,6 +419,24 @@ def gun_bandi_goster():
                      "Tavsiye satış fiyatları geçerli; bir sonraki BuyBox önerisi Perşembe hazırlanacak.", "ℹ️")
 
 
+def _siralama_oku(deger):
+    """BuyBox script'inin yazdığı sıralama JSON'unu okur; yoksa ya da bozuksa None."""
+    try:
+        d = json.loads(str(deger)) if deger else None
+    except (ValueError, TypeError):
+        return None
+    return d if isinstance(d, dict) and d.get("ilk") else None
+
+
+def _siralama_metni(d):
+    if not d:
+        return ""
+    metin = " · ".join(f"{i}) {x.get('ad', '')} {x.get('fiyat', 0):g}" for i, x in enumerate(d["ilk"], 1))
+    if d.get("braun_sira") and d["braun_sira"] > len(d["ilk"]):
+        metin += f" · Braun Shop: {d['braun_sira']}. sıra"
+    return metin
+
+
 def bb_donustur(df, gorsel_map, barkod_map):
     """BuyBox Sheet verisini tasarim.buybox_tablosu'nun beklediği satır listesine çevirir."""
     satirlar = []
@@ -444,6 +463,8 @@ def bb_donustur(df, gorsel_map, barkod_map):
             "tsf": _sayi(r.get("Tavsiye Fiyat")), "ty": rakip("TY"), "hb": rakip("HB"),
             "oneri": _sayi(r.get("Önerilen BuyBox Fiyatı")), "durum": durum,
             "fark_tl": _sayi(r.get("Fark (TL)")), "fark_yuzde": fark_y,
+            "ty_sira": _siralama_oku(r.get("TY BuyBox Sıralaması")),
+            "hb_sira": _siralama_oku(r.get("HB BuyBox Sıralaması")),
             "ty_okuma": str(r.get("TY Okuma", "") or "").strip(),
             "hb_okuma": str(r.get("HB Okuma", "") or "").strip(),
             "ty_bb": str(r.get("TY BuyBox Sahibi", "") or "").strip(),
@@ -464,6 +485,7 @@ def _bb_excel_verisi(satirlar):
             "HB En Ucuz Rakip": (s["hb"] or {}).get("ad", ""), "HB Rakip Fiyat": (s["hb"] or {}).get("fiyat"),
             "Önerilen BuyBox Fiyatı": s["oneri"], "Fark (TL)": s["fark_tl"], "Fark (%)": s["fark_yuzde"],
             "Durum": s["durum"], "TY BuyBox Sahibi": s["ty_bb"], "HB BuyBox Sahibi": s["hb_bb"],
+            "TY BuyBox Sırası": _siralama_metni(s["ty_sira"]), "HB BuyBox Sırası": _siralama_metni(s["hb_sira"]),
         })
     out = io.BytesIO()
     with pd.ExcelWriter(out, engine="openpyxl") as w:
