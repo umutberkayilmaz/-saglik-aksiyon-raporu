@@ -17,7 +17,8 @@ GSHEET_NAME = "Saglik_Aksiyon_Guncel"
 GSHEET_WORKSHEET = "Guncel"
 BUYBOX_WORKSHEET = "BuyBox"
 DURUM_WORKSHEET = "Durum"             # ana script'in yazdigi platform tarama durumlari
-GECIKME_ESIGI_DK = 120                # son tarama bundan eskiyse panel uyari gosterir
+GECIKME_ESIGI_DK = 120                # fiyat taramasi (saat basi) bundan eskiyse panel uyari gosterir
+BB_GECIKME_ESIGI_DK = 26 * 60         # BuyBox taramasi (gunde 1) bundan eskiyse BuyBox sekmesi uyari gosterir
 BUYUK_SAPMA_YUZDE = 15
 
 # ================= PANEL AYARLARI (buradan düzenleyebilirsin) =================
@@ -500,7 +501,7 @@ def buybox_sayfasi():
     df, zaman = load_buybox()
     tasarim.bb_baslik(zaman.replace("Son Güncelleme: ", "") if zaman else "", BUYUK_SAPMA_YUZDE)
     gun_bandi_goster()
-    tasarim.veri_uyarilari(None, tarama_yasi_dk(zaman), GECIKME_ESIGI_DK)
+    tasarim.veri_uyarilari(None, tarama_yasi_dk(zaman), BB_GECIKME_ESIGI_DK)
     if df is None or df.empty:
         st.warning("Henüz BuyBox verisi yok. Bilgisayarda buybox_script.py çalıştıktan sonra burada görünecek.")
         return
