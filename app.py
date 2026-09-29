@@ -225,9 +225,12 @@ def load_durum():
 
 def tarama_yasi_dk(guncelleme_metni):
     """'Son Güncelleme: 24.09.2026 12:05' -> kac dakika once (Turkiye saati). Okunamazsa None."""
+    m = re.search(r"(\d{2}\.\d{2}\.\d{4})\s+(\d{2}:\d{2})", str(guncelleme_metni or ""))
+    if not m:
+        return None
     try:
-        t = datetime.strptime(guncelleme_metni.replace("Son Güncelleme:", "").strip(), "%d.%m.%Y %H:%M")
-    except (ValueError, AttributeError):
+        t = datetime.strptime(f"{m.group(1)} {m.group(2)}", "%d.%m.%Y %H:%M")
+    except ValueError:
         return None
     simdi = (datetime.now(timezone.utc) + timedelta(hours=3)).replace(tzinfo=None)
     return max(0, (simdi - t).total_seconds() / 60)
@@ -497,6 +500,7 @@ def buybox_sayfasi():
     df, zaman = load_buybox()
     tasarim.bb_baslik(zaman.replace("Son Güncelleme: ", "") if zaman else "", BUYUK_SAPMA_YUZDE)
     gun_bandi_goster()
+    tasarim.veri_uyarilari(None, tarama_yasi_dk(zaman), GECIKME_ESIGI_DK)
     if df is None or df.empty:
         st.warning("Henüz BuyBox verisi yok. Bilgisayarda buybox_script.py çalıştıktan sonra burada görünecek.")
         return
