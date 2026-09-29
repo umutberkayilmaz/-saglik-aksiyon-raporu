@@ -11,7 +11,7 @@ from google.oauth2.service_account import Credentials
 import tasarim
 
 # ================= SAYFA AYARLARI =================
-st.set_page_config(page_title="Sağlık · Fiyat & Buybox", page_icon="📊", layout="wide")
+st.set_page_config(page_title="Sağlık · Fiyat & Buybox", page_icon=tasarim.favicon(), layout="wide")
 
 GSHEET_NAME = "Saglik_Aksiyon_Guncel"
 GSHEET_WORKSHEET = "Guncel"
@@ -546,11 +546,29 @@ for _kanal in KANALLAR:
         tasarim.KANAL_LOGOLARI[_kanal] = (f'<img src="{_src}" height="22" alt="{_kanal}" '
                                          f'referrerpolicy="no-referrer" style="{_stil}">')
 
+FIYAT_SEKMESI, BUYBOX_SEKMESI = "📊 Fiyat & Buybox Takibi", "🛒 BuyBox Önerisi"
+
+
+def _tarih_metni(guncelleme):
+    """'Son Güncelleme: 28.09.2026 12:00 (Pazartesi)' -> '28.09.2026 · 12:00'"""
+    m = re.search(r"(\d{2}\.\d{2}\.\d{4})\s+(\d{2}:\d{2})", str(guncelleme or ""))
+    return f"{m.group(1)} · {m.group(2)}" if m else ""
+
+
 _df_fiyat, _guncelleme = load_data()
-_son = _guncelleme.replace("Son Güncelleme:", "").strip().replace(" ", " · ", 1) if _guncelleme else ""
 _yas = tarama_yasi_dk(_guncelleme)
-tasarim.ust_bant(_son, canli=(_yas is None or _yas <= GECIKME_ESIGI_DK))
-sekme_fiyat, sekme_buybox = st.tabs(["📊 Fiyat & Buybox Takibi", "🛒 BuyBox Önerisi"])
+
+# Ust bant, acik olan sekmenin kendi taramasini gosterir (fiyat: saat basi, BuyBox: gunluk)
+if st.session_state.get("ana_sekme") == BUYBOX_SEKMESI:
+    _, _bb_zaman = load_buybox()
+    _bb_yas = tarama_yasi_dk(_bb_zaman)
+    tasarim.ust_bant(_tarih_metni(_bb_zaman), canli=(_bb_yas is None or _bb_yas <= BB_GECIKME_ESIGI_DK),
+                     etiket="Son BuyBox taraması")
+else:
+    tasarim.ust_bant(_tarih_metni(_guncelleme), canli=(_yas is None or _yas <= GECIKME_ESIGI_DK),
+                     etiket="Son fiyat taraması")
+
+sekme_fiyat, sekme_buybox = st.tabs([FIYAT_SEKMESI, BUYBOX_SEKMESI], key="ana_sekme", on_change="rerun")
 with sekme_fiyat:
     fiyat_buybox_sayfasi(_df_fiyat, _yas)
 with sekme_buybox:
