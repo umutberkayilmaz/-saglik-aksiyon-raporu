@@ -182,8 +182,27 @@ def load_data():
         return None, ""
 
 
+def kampanya_penceresi():
+    """Kampanya listesinin geçerlilik aralığı (başlangıç, bitiş) ya da None."""
+    d = load_durum().get("Kampanya listesi") or {}
+    if d.get("durum") != "Tamam":
+        return None
+    tarihler = re.findall(r"\d{2}\.\d{2}\.\d{4}", d.get("son_basarili", ""))
+    if len(tarihler) != 2:
+        return None
+    try:
+        return tuple(datetime.strptime(t, "%d.%m.%Y").date() for t in tarihler)
+    except ValueError:
+        return None
+
+
 def hafta_sonu_mu():
-    return (datetime.now(timezone.utc) + timedelta(hours=3)).weekday() in (4, 5, 6)
+    """Kampanya dönemi mi? Kampanya listesi varsa onun tarihleri, yoksa cuma-pazar."""
+    bugun = (datetime.now(timezone.utc) + timedelta(hours=3)).date()
+    pencere = kampanya_penceresi()
+    if pencere:
+        return pencere[0] <= bugun <= pencere[1]
+    return bugun.weekday() in (4, 5, 6)
 
 
 def _dolu(v):
@@ -367,7 +386,22 @@ def fiyat_buybox_sayfasi(df, yas_dk=None):
 
     notu = (f"BB bilgisi: {bb_zaman.replace('Son Güncelleme: ', '')} BuyBox taraması (Trendyol, Hepsiburada)."
             if bb_zaman else "BB bilgisi perşembe BuyBox taramasından sonra görünür.")
-    if hafta_sonu_mu():
+    kampanya = load_durum().get("Kampanya listesi") or {}
+    pencere = kampanya_penceresi()
+    if pencere:
+        aralik = f"{pencere[0]:%d.%m}–{pencere[1]:%d.%m.%Y}"
+        parcalar = kampanya.get("aciklama", "").split(" · ")
+        ozet = parcalar[1] if len(parcalar) > 1 else ""
+        notu += (f" Kampanya listesi {aralik}" + (f" ({ozet})" if ozet else "")
+                 + (": bugün kampanya fiyatına göre karşılaştırılıyor." if hafta_sonu_mu()
+                    else ": kampanya günlerinde kampanya fiyatına göre karşılaştırılacak."))
+        if "kontrol et" in kampanya.get("aciklama", "") or "birden fazla" in kampanya.get("aciklama", ""):
+            notu += " Eşleştirme uyarısı var: ayrıntılar için Sheet'teki Durum sayfasına bakın."
+    elif kampanya.get("durum") == "Süresi doldu":
+        notu += " Son kampanya listesinin süresi doldu; karşılaştırma TSF'ye göre."
+    elif kampanya.get("durum") == "Okunamadı":
+        notu += f" Kampanya listesi okunamadı ({kampanya.get('aciklama', '')[:80]})."
+    elif hafta_sonu_mu():
         notu += " Hafta sonu: kampanya fiyatı girilmiş ürünler kampanya fiyatına göre karşılaştırılır."
     tasarim.govde(satirlar, ESIK_YUZDE, tablo_notu=notu, klasik=True, akakce_goster=AKAKCE_GOSTER,
                   kanal_durumu=kanal_durumu)
