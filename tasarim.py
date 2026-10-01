@@ -597,7 +597,8 @@ def veri_uyarilari(kanal_durumu, son_tarama_yasi_dk=None, gecikme_esigi_dk: int 
 
 
 def fiyat_tablosu_klasik(h: dict, filtre: str = "Tümü", not_: str = "", esik: float = 5,
-                         akakce_goster: bool = True, kanal_durumu: dict | None = None) -> None:
+                         akakce_goster: bool = True, kanal_durumu: dict | None = None,
+                         kampanya_etiketi: str = "Hafta sonu") -> None:
     """[eklendi] Eski panel düzeni: Barkod | Ürün Kodu (üzerine gelince görsel) | Alt Grup | TSF | Kampanya |
     Akakçe | Braunshop ve pazar yerleri. Satır verisi hesapla() çıktısından gelir."""
     satirlar = h["satirlar"]
@@ -610,7 +611,7 @@ def fiyat_tablosu_klasik(h: dict, filtre: str = "Tümü", not_: str = "", esik: 
     akakce_sayi = sum(1 for r in satirlar if r.get("akakce"))
     sayilar = {k: sum(1 for r in satirlar if r["hucreler"][i]["durum"] != "none") for i, k in enumerate(kanal_adlari)}
     bas = ('<th>Barkod</th><th>Ürün Kodu</th><th>Alt Grup</th><th>TSF</th>'
-           '<th>Kampanya Fiyatı<small>Hafta sonu</small></th>')
+           f'<th>Kampanya Fiyatı<small>{html.escape(kampanya_etiketi)}</small></th>')
     ak_eski, ak_veriyok, ak_rozet = _kanal_durum_bilgisi(kanal_durumu, "Akakçe")
     if akakce_goster:
         ak_sayi = "?" if ak_veriyok and not ak_eski else akakce_sayi
@@ -916,7 +917,7 @@ def dashboard(satirlar: list[dict], son_tarama: str = "", esik: float = 5, tablo
 
 
 def govde(satirlar: list[dict], esik: float = 5, tablo_notu: str = "", klasik: bool = False,
-          akakce_goster: bool = True, kanal_durumu: dict | None = None) -> None:
+          akakce_goster: bool = True, kanal_durumu: dict | None = None, kampanya_etiketi: str = "Hafta sonu") -> None:
     """[eklendi] Ust bant ve alt bant olmadan: KPI kartlari + fiyat tablosu + yan panel."""
     h = hesapla(satirlar, esik)
     kpi_kartlari(h, len(satirlar), esik)
@@ -933,7 +934,7 @@ def govde(satirlar: list[dict], esik: float = 5, tablo_notu: str = "", klasik: b
                 else:
                     filtre = st.radio("Filtre", secenekler, horizontal=True,
                                       label_visibility="collapsed", key="pt_filtre")
-            fiyat_tablosu_klasik(h, filtre, tablo_notu, esik, akakce_goster, kanal_durumu)
+            fiyat_tablosu_klasik(h, filtre, tablo_notu, esik, akakce_goster, kanal_durumu, kampanya_etiketi)
         alt_paneller(h)
         return
     sol, sag = st.columns([3.2, 1], gap="medium")
