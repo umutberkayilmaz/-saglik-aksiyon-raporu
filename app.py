@@ -196,6 +196,31 @@ def kampanya_penceresi():
         return None
 
 
+AY_ADLARI = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"]
+
+
+def kampanya_etiketi():
+    """Kampanya Fiyatı başlığının alt yazısı: '2-3-4 Ekim', '30-31 Ekim, 1 Kasım', '5-11 Ekim'."""
+    d = load_durum().get("Kampanya listesi") or {}
+    if d.get("durum") == "Süresi doldu":
+        return "Aktif kampanya yok"
+    pencere = kampanya_penceresi()
+    if not pencere:
+        return "Hafta sonu"
+    bas, bit = pencere
+    gunler = [bas + timedelta(days=i) for i in range((bit - bas).days + 1)]
+    if len(gunler) > 4:
+        if bas.month == bit.month:
+            return f"{bas.day}-{bit.day} {AY_ADLARI[bit.month - 1]}"
+        return f"{bas.day} {AY_ADLARI[bas.month - 1]} - {bit.day} {AY_ADLARI[bit.month - 1]}"
+    aylar = []
+    for g in gunler:
+        if not aylar or aylar[-1][0] != g.month:
+            aylar.append((g.month, []))
+        aylar[-1][1].append(str(g.day))
+    return ", ".join(f"{'-'.join(gs)} {AY_ADLARI[ay - 1]}" for ay, gs in aylar)
+
+
 def hafta_sonu_mu():
     """Kampanya dönemi mi? Kampanya listesi varsa onun tarihleri, yoksa cuma-pazar."""
     bugun = (datetime.now(timezone.utc) + timedelta(hours=3)).date()
@@ -367,7 +392,7 @@ def fiyat_buybox_sayfasi(df, yas_dk=None):
     bb_df, bb_zaman = load_buybox()
     satirlar = veriyi_donustur(df, bb_df)
 
-    c1, c2, c3 = st.columns([2.2, 2.2, 1])
+    c1, c2, c_yenile, c3 = st.columns([2.2, 2.2, 0.9, 1])
     with c1:
         ara = st.text_input("Ürün ara", placeholder="Ürün adı, kodu ya da barkod", key="fb_ara")
     with c2:
@@ -378,6 +403,11 @@ def fiyat_buybox_sayfasi(df, yas_dk=None):
         satirlar = [s for s in satirlar if aranan in s["_arama"]]
     if secilen:
         satirlar = [s for s in satirlar if s["_grup"] in secilen]
+    with c_yenile:
+        st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
+        if st.button("🔄 Verileri yenile", key="fb_yenile", help="Elle tarama yaptıysan 3 dakikalık önbelleği beklemeden güncel veriyi getirir"):
+            st.cache_data.clear()
+            st.rerun()
     with c3:
         st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
         zaman = (datetime.now(timezone.utc) + timedelta(hours=3)).strftime("%d-%m-%Y_%H-%M")
@@ -404,7 +434,7 @@ def fiyat_buybox_sayfasi(df, yas_dk=None):
     elif hafta_sonu_mu():
         notu += " Hafta sonu: kampanya fiyatı girilmiş ürünler kampanya fiyatına göre karşılaştırılır."
     tasarim.govde(satirlar, ESIK_YUZDE, tablo_notu=notu, klasik=True, akakce_goster=AKAKCE_GOSTER,
-                  kanal_durumu=kanal_durumu)
+                  kanal_durumu=kanal_durumu, kampanya_etiketi=kampanya_etiketi())
 
 
 # ================= BUYBOX SEKMESİ =================
@@ -550,7 +580,7 @@ def buybox_sayfasi():
             barkod_map = {k: v for k, v in zip(kodlar, fiyat_df["Barkod"]) if v}
     satirlar = bb_donustur(df, gorsel_map, barkod_map)
 
-    c1, c2, c3 = st.columns([2.2, 2.2, 1])
+    c1, c2, c_yenile, c3 = st.columns([2.2, 2.2, 0.9, 1])
     with c1:
         ara = st.text_input("Ürün ara", placeholder="Ürün adı, kodu ya da barkod", key="bb_ara")
     with c2:
@@ -561,6 +591,11 @@ def buybox_sayfasi():
         satirlar = [s for s in satirlar if aranan in s["_arama"]]
     if secilen:
         satirlar = [s for s in satirlar if s["grup"] in secilen]
+    with c_yenile:
+        st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
+        if st.button("🔄 Verileri yenile", key="bb_yenile", help="Elle tarama yaptıysan 3 dakikalık önbelleği beklemeden güncel veriyi getirir"):
+            st.cache_data.clear()
+            st.rerun()
     with c3:
         st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
         zaman_ek = (datetime.now(timezone.utc) + timedelta(hours=3)).strftime("%d-%m-%Y_%H-%M")
