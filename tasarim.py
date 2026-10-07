@@ -790,6 +790,14 @@ def _bb_sira_hucre(sira, rakip, okuma: str = "", sahip: str = "") -> str:
     elif not bs:
         ek += ('<div class="pt-bbl" title="Braun Shop bu üründe stokta değil ya da listelemiyor">'
                '<span class="no">–</span><span class="ad" style="color:#9AA8A0">Braun Shop yok</span><span class="f"></span></div>')
+    for d in sira.get("diger") or []:                   # aynı ürünün ikinci ilan sayfası
+        try:
+            df_ = _fmt2(float(d.get("fiyat")))
+        except (TypeError, ValueError):
+            continue
+        ek += (f'<div class="pt-bbl" title="Aynı ürünün diğer ilan sayfasında buybox sahibi ({d.get("toplam") or "?"} satıcı)">'
+               f'<span class="no">↗</span><span class="ad">{html.escape(str(d.get("ad") or ""))}'
+               f'<span class="ucuz">DİĞER İLAN</span></span><span class="f">{df_}</span></div>')
     ayrac = '<div class="pt-bbl-ayrac"></div>' if ek else ""
     return f'<div class="pt-bbl-kutu">{satirlar_}{ayrac}{ek}</div>'
 
