@@ -502,6 +502,8 @@ def _siralama_metni(d):
     metin = " · ".join(f"{i}) {x.get('ad', '')} {x.get('fiyat', 0):g}" for i, x in enumerate(d["ilk"], 1))
     if d.get("braun_sira") and d["braun_sira"] > len(d["ilk"]):
         metin += f" · Braun Shop: {d['braun_sira']}. sıra"
+    for x in d.get("diger") or []:
+        metin += f" · Diğer ilan: {x.get('ad', '')} {x.get('fiyat', 0):g}"
     return metin
 
 
