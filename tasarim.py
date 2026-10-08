@@ -1,4 +1,4 @@
-"""
+     """
 tasarim.py — Sağlık Fiyat & Buybox paneli için görsel katman.
 
 Mevcut uygulamanızda veri toplama / hesaplama aynı kalır; bu dosya yalnızca
@@ -772,6 +772,8 @@ def _bb_sira_hucre(sira, rakip, okuma: str = "", sahip: str = "") -> str:
             etiket = '<span class="ucuz" title="Önerilen BuyBox fiyatı bu rakibe göre hesaplandı">EN UCUZ</span>'
             if link.startswith("http"):
                 ad = f'<a href="{html.escape(link, quote=True)}" target="_blank" title="Rakibin ilanını aç">{ad}</a>'
+        if x.get("sepette"):
+            etiket += '<span class="ucuz" title="Sepette indirimli fiyat (sepete eklenince geçerli olan)">SEPETTE</span>'
         ipucu = "Buybox bu satıcıda" if i == 1 else f"Buybox sırasında {i}."
         satirlar_ += (f'<div class="{sinif}" title="{ipucu}"><span class="no">{i}</span><span class="ad">{ad}'
                       f'{" ✓" if x.get("braun") else ""}{etiket}</span><span class="f">{_fmt2(float(x["fiyat"]))}</span></div>')
