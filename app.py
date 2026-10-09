@@ -621,7 +621,7 @@ for _kanal in KANALLAR:
         tasarim.KANAL_LOGOLARI[_kanal] = (f'<img src="{_src}" height="22" alt="{_kanal}" '
                                          f'referrerpolicy="no-referrer" style="{_stil}">')
 
-FIYAT_SEKMESI, BUYBOX_SEKMESI = ":material/bar_chart: Fiyat Takibi", ":material/shopping_cart: BuyBox"
+FIYAT_SEKMESI, BUYBOX_SEKMESI = ":material/bar_chart: Ürün Takibi", ":material/shopping_cart: BuyBox"
 
 
 def _tarih_metni(guncelleme):

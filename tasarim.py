@@ -474,7 +474,7 @@ def ust_baslik(sekmeler: list[str], son_tarama_fn) -> str:
 def baslik(esik: float = 5) -> None:
     sol, sag = st.columns([1, 1])
     with sol:
-        st.markdown('<div class="pt-title"><h1>Fiyat Takibi</h1></div>', unsafe_allow_html=True)
+        st.markdown('<div class="pt-title"><h1>Ürün Takibi</h1></div>', unsafe_allow_html=True)
     with sag:
         e = f"{esik:g}"
         st.markdown(f"""<div class="pt-legend" style="padding-top:22px"><span style="color:#6A7E72">Renk kodu</span>
@@ -1011,7 +1011,7 @@ def alt_bant() -> None:
         kutular += '<div class="pt-logo">' + (logo or html.escape(k["ad"])) + "</div>"
     st.markdown(
         '<div class="pt-footer" lang="tr"><div class="top"><span>Takip edilen satış kanalları</span>'
-        '<span style="text-transform:none;letter-spacing:0;font-weight:500">Sağlık kategorisi · Fiyat Takibi &amp; BuyBox</span></div>'
+        '<span style="text-transform:none;letter-spacing:0;font-weight:500">Sağlık kategorisi · Ürün Takibi &amp; BuyBox</span></div>'
         f'<div class="pt-logos">{kutular}</div></div>',
         unsafe_allow_html=True)
 
