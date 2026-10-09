@@ -387,7 +387,10 @@ _UST_CSS = """<style>
   background:#F4E300 !important;box-shadow:inset 0 0 0 1.5px #121212 !important;}
 .st-key-sekme button[aria-checked="true"] p,.st-key-sekme button[kind="segmented_controlActive"] p{font-weight:700;}
 .ust-logo{display:flex;justify-content:center;align-items:center;}
-.ust-logo svg{width:100%;max-width:560px;height:auto;display:block;}
+.ust-logo svg{width:100%;height:auto;display:block;}
+.st-key-ust_baslik [data-testid="stMarkdownContainer"]{margin-bottom:0 !important;}
+.st-key-ust_baslik [data-testid="stElementContainer"]{margin-bottom:0 !important;}
+.st-key-ust_baslik [data-testid="stColumn"]{display:flex;flex-direction:column;justify-content:center;}
 .ust-durum{display:flex;white-space:nowrap;justify-content:flex-end;align-items:center;gap:16px;}
 .ust-canli{display:inline-flex;align-items:center;gap:8px;height:38px;padding:0 16px;border-radius:999px;
   font-size:15px;font-weight:600;line-height:38px;}
@@ -399,6 +402,43 @@ _UST_CSS = """<style>
 .ust-tarama small{font-size:12px;letter-spacing:.06em;color:#4f6359;font-weight:600;text-transform:uppercase;}
 .ust-tarama b{font-size:18px;color:#16231c;}
 </style>"""
+
+
+def _baslik_svg() -> str:
+    """Üst kart animasyonu: soldan nabız çizgisi gelir, ortada 'Sistem 40. Yıl' yazılır, yazı silinir ve
+    tam ortada yalnızca Sistem logosu kalır; nabız logodan geçip sağa devam eder."""
+    s = _HEADER_SVG
+    defs = s[s.find("<defs>"):s.find("</defs>") + len("</defs>")]
+    metin = s[s.find('<g clip-path="url(#ecgReveal)">'):s.find('<path d="M419.58')]
+    lb = '<g style="transform-origin: 540.4px 40.0px; animation: logoIn 0.7s cubic-bezier(.2,.8,.2,1) 4.00s both">'
+    logo = "<g>" + s[s.find(lb) + len(lb):s.rfind("</svg>")]
+    def cizgi(d, gecikme, sure, sinif=""):
+        ortak = f'd="{d}" pathLength="1" fill="none" stroke-linecap="round" stroke-linejoin="round"'
+        anim = f"stroke-dasharray:1;animation:ecgDraw {sure}s linear {gecikme}s both"
+        return (f'<path {ortak} stroke="#F4E300" stroke-width="7" style="{anim}"></path>'
+                f'<path {ortak} stroke="#121212" stroke-width="2.6" style="{anim}"></path>')
+    sol = ("M0 45 L30 45 L36 39 L42 45 L54 45 L59 51 L66 12 L74 76 L79 45 L98 45 L105 37 L112 45 "
+           "L150 45 L156 40 L162 45 L172 45 L177 50 L184 18 L191 72 L196 45 L250 45")
+    bag = "M250 45 L288 45 L294 39 L300 45 L310 45 L315 51 L322 14 L329 76 L334 45 L370 45"
+    sag = ("M530 45 L560 45 L566 39 L572 45 L584 45 L589 51 L596 16 L603 74 L608 45 L700 45 "
+           "L706 40 L712 45 L900 45")
+    return f"""<svg viewBox="0 0 900 90" width="900" height="90" fill="none" role="img" aria-label="Sistem 40. Yıl">
+{cizgi(sol, 0, 0.9)}
+<g transform="translate(450 45) scale(1.25) translate(-264.8 -40)"><g class="yazi-cik">{defs}{metin}</g></g>
+{cizgi(bag, 4.0, 0.45)}
+<g transform="translate(450 45) scale(1.4) translate(-540.4 -40)"><g class="logo-gir">{logo}</g></g>
+{cizgi(sag, 4.6, 0.9)}
+<path class="ecg-pulse" d="{sol} {bag[bag.find("L"):]}" pathLength="1" stroke="#FFE94D" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>"""
+
+
+_BASLIK_ANIM_CSS = """
+@keyframes yaziCik{0%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(.94)}}
+.yazi-cik{transform-box:fill-box;transform-origin:center;animation:yaziCik .55s ease-in 3.5s both}
+.logo-gir{transform-box:fill-box;transform-origin:center;animation:logoIn .7s cubic-bezier(.2,.8,.2,1) 4.15s both}
+@media (prefers-reduced-motion:reduce){.ust-logo *{animation:none!important;stroke-dashoffset:0!important}
+ .yazi-cik{display:none}.ecg-pulse,.ecg-pen{display:none}}
+"""
 
 
 def ust_baslik(sekmeler: list[str], son_tarama_fn) -> str:
@@ -414,15 +454,15 @@ def ust_baslik(sekmeler: list[str], son_tarama_fn) -> str:
         else:
             st.session_state["aktif_sekme"] = st.session_state["sekme"]
 
-    st.markdown(_UST_CSS + f"<style>{_HEADER_CSS}</style>", unsafe_allow_html=True)
+    st.markdown(_UST_CSS.replace("</style>", _HEADER_CSS + _BASLIK_ANIM_CSS + "</style>"), unsafe_allow_html=True)
     aktif = st.session_state["aktif_sekme"]
     tarih, canli, etiket = son_tarama_fn(aktif)
     with st.container(key="ust_baslik"):
-        sol, orta, sag = st.columns([1.3, 1.6, 1.1])
+        sol, orta, sag = st.columns([1.15, 2.3, 1.05], gap="small")
         with sol:
             st.segmented_control("Sekme", sekmeler, key="sekme", on_change=_degisti, label_visibility="collapsed")
         with orta:
-            st.markdown(f'<div class="ust-logo ecg-head">{_HEADER_SVG}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="ust-logo ecg-head">{_baslik_svg()}</div>', unsafe_allow_html=True)
         with sag:
             rozet = ('<div class="ust-canli ok"><span></span>Canlı takip</div>' if canli
                      else '<div class="ust-canli gec"><span></span>Tarama gecikti</div>')
