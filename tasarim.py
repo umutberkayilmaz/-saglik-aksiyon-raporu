@@ -371,12 +371,70 @@ circle{{transform-box:fill-box;transform-origin:center}}
         components.html(doc, height=106)
 
 
+_UST_CSS = """<style>
+[data-testid="stIconMaterial"]{font-family:"Material Symbols Rounded" !important;}
+.st-key-ust_baslik{background:#ffffff;border:1px solid #e3ebe6;border-radius:28px;
+  box-shadow:0 6px 20px rgba(28,60,42,.06);padding:14px 28px;}
+.st-key-ust_baslik [data-testid="stHorizontalBlock"]{align-items:center;}
+.st-key-sekme [data-testid="stButtonGroup"] > div:last-child{display:inline-flex !important;flex-wrap:nowrap !important;
+  width:auto !important;max-width:none !important;overflow:visible !important;gap:4px;background:#ffffff;
+  border:1.5px solid #121212;border-radius:999px;padding:5px;}
+.st-key-sekme button{flex-shrink:0;white-space:nowrap;height:44px;padding:0 20px !important;border:0 !important;outline:none;
+  border-radius:999px !important;background:transparent !important;box-shadow:none !important;color:#121212 !important;}
+.st-key-sekme button p{color:#121212 !important;font-size:15px;font-weight:500;}
+.st-key-sekme button:hover{background:#FFF8B3 !important;}
+.st-key-sekme button[aria-checked="true"],.st-key-sekme button[kind="segmented_controlActive"]{
+  background:#F4E300 !important;box-shadow:inset 0 0 0 1.5px #121212 !important;}
+.st-key-sekme button[aria-checked="true"] p,.st-key-sekme button[kind="segmented_controlActive"] p{font-weight:700;}
+.ust-logo{display:flex;justify-content:center;align-items:center;}
+.ust-logo svg{width:100%;max-width:560px;height:auto;display:block;}
+.ust-durum{display:flex;white-space:nowrap;justify-content:flex-end;align-items:center;gap:16px;}
+.ust-canli{display:inline-flex;align-items:center;gap:8px;height:38px;padding:0 16px;border-radius:999px;
+  font-size:15px;font-weight:600;line-height:38px;}
+.ust-canli.ok{background:#e8f4ec;color:#1e6b40;} .ust-canli.gec{background:#FFF5DA;color:#7F5300;}
+.ust-canli span{width:9px;height:9px;border-radius:50%;display:inline-block;}
+.ust-canli.ok span{background:#1e7a46;animation:ustNabiz 1.8s ease-out infinite;} .ust-canli.gec span{background:#D08A00;}
+@keyframes ustNabiz{0%{box-shadow:0 0 0 0 rgba(23,138,78,.45)}70%{box-shadow:0 0 0 8px rgba(23,138,78,0)}100%{box-shadow:0 0 0 0 rgba(23,138,78,0)}}
+.ust-tarama{display:flex;flex-direction:column;gap:2px;line-height:1.2;}
+.ust-tarama small{font-size:12px;letter-spacing:.06em;color:#4f6359;font-weight:600;text-transform:uppercase;}
+.ust-tarama b{font-size:18px;color:#16231c;}
+</style>"""
+
+
+def ust_baslik(sekmeler: list[str], son_tarama_fn) -> str:
+    """Tek kart: solda sekmeler, ortada animasyonlu Sistem 40. Yıl logosu, sağda canlı takip + son tarama.
+    son_tarama_fn(aktif_sekme) -> (tarih_metni, canli_mi, etiket). Seçili sekmeyi döndürür."""
+    if st.session_state.get("aktif_sekme") not in sekmeler:
+        st.session_state["aktif_sekme"] = sekmeler[0]
+        st.session_state["sekme"] = sekmeler[0]
+
+    def _degisti():                      # seçili sekmeye tekrar tıklanınca seçim kalkmasın
+        if st.session_state.get("sekme") is None:
+            st.session_state["sekme"] = st.session_state["aktif_sekme"]
+        else:
+            st.session_state["aktif_sekme"] = st.session_state["sekme"]
+
+    st.markdown(_UST_CSS + f"<style>{_HEADER_CSS}</style>", unsafe_allow_html=True)
+    aktif = st.session_state["aktif_sekme"]
+    tarih, canli, etiket = son_tarama_fn(aktif)
+    with st.container(key="ust_baslik"):
+        sol, orta, sag = st.columns([1.3, 1.6, 1.1])
+        with sol:
+            st.segmented_control("Sekme", sekmeler, key="sekme", on_change=_degisti, label_visibility="collapsed")
+        with orta:
+            st.markdown(f'<div class="ust-logo ecg-head">{_HEADER_SVG}</div>', unsafe_allow_html=True)
+        with sag:
+            rozet = ('<div class="ust-canli ok"><span></span>Canlı takip</div>' if canli
+                     else '<div class="ust-canli gec"><span></span>Tarama gecikti</div>')
+            st.markdown(f'<div class="ust-durum">{rozet}<div class="ust-tarama"><small>{html.escape(etiket)}</small>'
+                        f'<b>{html.escape(tarih or "–")}</b></div></div>', unsafe_allow_html=True)
+    return st.session_state["aktif_sekme"]
+
+
 def baslik(esik: float = 5) -> None:
     sol, sag = st.columns([1, 1])
     with sol:
-        st.markdown('<div class="pt-title"><h1>Fiyat &amp; Buybox Takibi</h1>'
-                    "<p>Pazar yerlerindeki satış fiyatlarının TSF'ye uyumu ve buybox durumu</p></div>",
-                    unsafe_allow_html=True)
+        st.markdown('<div class="pt-title"><h1>Fiyat Takibi</h1></div>', unsafe_allow_html=True)
     with sag:
         e = f"{esik:g}"
         st.markdown(f"""<div class="pt-legend" style="padding-top:22px"><span style="color:#6A7E72">Renk kodu</span>
@@ -682,9 +740,7 @@ def bant(tur: str, baslik_: str, metin: str, ikon: str = "") -> None:
 def bb_baslik(zaman: str = "", buyuk_esik: float = 15) -> None:
     sol, sag = st.columns([1, 1])
     with sol:
-        st.markdown('<div class="pt-title"><h1>BuyBox Önerisi</h1>'
-                    "<p>Braun Shop dışındaki en ucuz stoklu rakibin en az 10 ₺ altı, sonu 9 ile biten fiyat</p></div>",
-                    unsafe_allow_html=True)
+        st.markdown('<div class="pt-title"><h1>BuyBox</h1></div>', unsafe_allow_html=True)
     with sag:
         z = f'<span style="color:#6A7E72">Öneri verisi: <b style="color:#15261D">{html.escape(zaman)}</b></span>' if zaman else ""
         st.markdown(f"""<div class="pt-legend" style="padding-top:22px">{z}
@@ -842,7 +898,7 @@ def _bb_sahip_hucre(r: dict) -> str:
 
 
 def buybox_tablosu(satirlar: list[dict], filtre: str = "Tümü", not_: str = "", esik: float = 5,
-                   buyuk_esik: float = 15) -> None:
+                   buyuk_esik: float = 15, kampanya_etiketi: str = "") -> None:
     if filtre == "İnilecekler":
         satirlar = [r for r in satirlar if r.get("inilecek")]
     elif filtre == "Büyük sapmalar":
@@ -854,7 +910,9 @@ def buybox_tablosu(satirlar: list[dict], filtre: str = "Tümü", not_: str = "",
         return (f'<th class="ch" title="{ad} · buybox sırasındaki ilk {3} satıcı ve fiyatları">{ic}'
                 f'<small>BuyBox sırası</small></th>')
 
-    bas = ("<th>Barkod</th><th>Ürün Kodu</th><th>Alt Grup</th><th>TSF</th>" + logo_bas("Trendyol") + logo_bas("Hepsiburada")
+    kt = f"<small>{html.escape(kampanya_etiketi)}</small>" if kampanya_etiketi else ""
+    bas = ("<th>Barkod</th><th>Ürün Kodu</th><th>Alt Grup</th><th>TSF</th>"
+           f"<th>Kampanya Fiyatı{kt}</th>" + logo_bas("Trendyol") + logo_bas("Hepsiburada")
            + "<th>Önerilen<small>BuyBox fiyatı</small></th><th>Fark<small>TSF'ye göre</small></th>")
     govde = ""
     for r in satirlar:
@@ -863,7 +921,8 @@ def buybox_tablosu(satirlar: list[dict], filtre: str = "Tümü", not_: str = "",
                   f'<td><span class="pt-bk" title="{ad}">{html.escape(str(r.get("barkod") or "-"))}</span></td>'
                   f"<td>{_kod_html(r)}</td>"
                   f'<td><span class="pt-grp">{html.escape(str(r.get("grup") or ""))}</span></td>'
-                  f'<td>{_ref_hucre(r.get("tsf"), True)}</td>'
+                  f'<td>{_ref_hucre(r.get("tsf"), not r.get("kampanya_aktif"))}</td>'
+                  f'<td>{_ref_hucre(r.get("kampanya"), bool(r.get("kampanya_aktif")))}</td>'
                   f'<td>{_bb_sira_hucre(r.get("ty_sira"), r.get("ty"), r.get("ty_okuma", ""), r.get("ty_bb", ""))}</td>'
                   f'<td>{_bb_sira_hucre(r.get("hb_sira"), r.get("hb"), r.get("hb_okuma", ""), r.get("hb_bb", ""))}</td>'
                   f"<td>{_oneri_hucre(r)}</td><td>{_fark_hucre(r)}</td></tr>")
@@ -878,7 +937,8 @@ def buybox_tablosu(satirlar: list[dict], filtre: str = "Tümü", not_: str = "",
         unsafe_allow_html=True)
 
 
-def bb_govde(satirlar: list[dict], esik: float = 5, buyuk_esik: float = 15, not_: str = "") -> None:
+def bb_govde(satirlar: list[dict], esik: float = 5, buyuk_esik: float = 15, not_: str = "",
+             kampanya_etiketi: str = "") -> None:
     bb_kpi(satirlar, buyuk_esik)
     with st.container(key="pt_bb_tablosu"):
         a, b = st.columns([1.4, 1])
@@ -891,7 +951,7 @@ def bb_govde(satirlar: list[dict], esik: float = 5, buyuk_esik: float = 15, not_
                                               label_visibility="collapsed", key="pt_bb_filtre") or "Tümü"
             else:
                 filtre = st.radio("BB filtre", secenekler, horizontal=True, label_visibility="collapsed", key="pt_bb_filtre")
-        buybox_tablosu(satirlar, filtre, not_, esik, buyuk_esik)
+        buybox_tablosu(satirlar, filtre, not_, esik, buyuk_esik, kampanya_etiketi)
 
 
 def yan_panel(h: dict) -> None:
@@ -911,7 +971,7 @@ def alt_bant() -> None:
         kutular += '<div class="pt-logo">' + (logo or html.escape(k["ad"])) + "</div>"
     st.markdown(
         '<div class="pt-footer" lang="tr"><div class="top"><span>Takip edilen satış kanalları</span>'
-        '<span style="text-transform:none;letter-spacing:0;font-weight:500">Sağlık kategorisi · Fiyat &amp; Buybox Takibi</span></div>'
+        '<span style="text-transform:none;letter-spacing:0;font-weight:500">Sağlık kategorisi · Fiyat Takibi &amp; BuyBox</span></div>'
         f'<div class="pt-logos">{kutular}</div></div>',
         unsafe_allow_html=True)
 

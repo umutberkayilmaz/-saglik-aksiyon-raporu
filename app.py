@@ -507,9 +507,10 @@ def _siralama_metni(d):
     return metin
 
 
-def bb_donustur(df, gorsel_map, barkod_map):
+def bb_donustur(df, gorsel_map, barkod_map, kampanya_map=None):
     """BuyBox Sheet verisini tasarim.buybox_tablosu'nun beklediği satır listesine çevirir."""
     satirlar = []
+    _kampanya_aktif = hafta_sonu_mu()
     for _, r in df.iterrows():
         kod = str(r.get("Ürün Kodu", "") or "").strip()
         ad = " ".join(str(r.get("Ürün Adı", "") or "").split())
@@ -531,6 +532,7 @@ def bb_donustur(df, gorsel_map, barkod_map):
         satirlar.append({
             "kod": kod, "tam_ad": ad, "grup": grup, "barkod": barkod, "gorsel": str(gorsel_map.get(kod, "") or ""),
             "tsf": _sayi(r.get("Tavsiye Fiyat")), "ty": rakip("TY"), "hb": rakip("HB"),
+            "kampanya": _sayi((kampanya_map or {}).get(kod)), "kampanya_aktif": _kampanya_aktif,
             "oneri": _sayi(r.get("Önerilen BuyBox Fiyatı")), "durum": durum,
             "fark_tl": _sayi(r.get("Fark (TL)")), "fark_yuzde": fark_y,
             "ty_sira": _siralama_oku(r.get("TY BuyBox Sıralaması")),
@@ -550,7 +552,7 @@ def _bb_excel_verisi(satirlar):
     for s in satirlar:
         kayit.append({
             "Barkod": s["barkod"], "Ürün Kodu": s["kod"], "Ürün Adı": s["tam_ad"], "Alt Grup": s["grup"],
-            "TSF": s["tsf"],
+            "TSF": s["tsf"], "Kampanya Fiyatı": s.get("kampanya"),
             "TY En Ucuz Rakip": (s["ty"] or {}).get("ad", ""), "TY Rakip Fiyat": (s["ty"] or {}).get("fiyat"),
             "HB En Ucuz Rakip": (s["hb"] or {}).get("ad", ""), "HB Rakip Fiyat": (s["hb"] or {}).get("fiyat"),
             "Önerilen BuyBox Fiyatı": s["oneri"], "Fark (TL)": s["fark_tl"], "Fark (%)": s["fark_yuzde"],
@@ -573,14 +575,16 @@ def buybox_sayfasi():
         return
 
     fiyat_df, _ = load_data()
-    gorsel_map, barkod_map = {}, {}
+    gorsel_map, barkod_map, kampanya_map = {}, {}, {}
     if fiyat_df is not None and "Ürün Kodu" in fiyat_df.columns:
         kodlar = [str(k).strip() for k in fiyat_df["Ürün Kodu"]]
         if "Görsel" in fiyat_df.columns:
             gorsel_map = {k: v for k, v in zip(kodlar, fiyat_df["Görsel"]) if v}
         if "Barkod" in fiyat_df.columns:
             barkod_map = {k: v for k, v in zip(kodlar, fiyat_df["Barkod"]) if v}
-    satirlar = bb_donustur(df, gorsel_map, barkod_map)
+        if "Kampanya Fiyatı" in fiyat_df.columns:
+            kampanya_map = {k: v for k, v in zip(kodlar, fiyat_df["Kampanya Fiyatı"]) if _sayi(v)}
+    satirlar = bb_donustur(df, gorsel_map, barkod_map, kampanya_map)
 
     c1, c2, c_yenile, c3 = st.columns([2.2, 2.2, 0.9, 1])
     with c1:
@@ -604,7 +608,7 @@ def buybox_sayfasi():
         st.download_button("📥 Excel'e Aktar", _bb_excel_verisi(satirlar), f"BuyBox_Onerisi_{zaman_ek}.xlsx",
                            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", key="bb_excel")
 
-    tasarim.bb_govde(satirlar, ESIK_YUZDE, BUYUK_SAPMA_YUZDE)
+    tasarim.bb_govde(satirlar, ESIK_YUZDE, BUYUK_SAPMA_YUZDE, kampanya_etiketi=kampanya_etiketi())
 
 
 # ================= SAYFA =================
@@ -617,7 +621,7 @@ for _kanal in KANALLAR:
         tasarim.KANAL_LOGOLARI[_kanal] = (f'<img src="{_src}" height="22" alt="{_kanal}" '
                                          f'referrerpolicy="no-referrer" style="{_stil}">')
 
-FIYAT_SEKMESI, BUYBOX_SEKMESI = "📊 Fiyat & Buybox Takibi", "🛒 BuyBox Önerisi"
+FIYAT_SEKMESI, BUYBOX_SEKMESI = ":material/bar_chart: Fiyat Takibi", ":material/shopping_cart: BuyBox"
 
 
 def _tarih_metni(guncelleme):
@@ -629,19 +633,18 @@ def _tarih_metni(guncelleme):
 _df_fiyat, _guncelleme = load_data()
 _yas = tarama_yasi_dk(_guncelleme)
 
-# Ust bant, acik olan sekmenin kendi taramasini gosterir (fiyat: saat basi, BuyBox: gunluk)
-if st.session_state.get("ana_sekme") == BUYBOX_SEKMESI:
-    _, _bb_zaman = load_buybox()
-    _bb_yas = tarama_yasi_dk(_bb_zaman)
-    tasarim.ust_bant(_tarih_metni(_bb_zaman), canli=(_bb_yas is None or _bb_yas <= BB_GECIKME_ESIGI_DK),
-                     etiket="Son BuyBox taraması")
-else:
-    tasarim.ust_bant(_tarih_metni(_guncelleme), canli=(_yas is None or _yas <= GECIKME_ESIGI_DK),
-                     etiket="Son fiyat taraması")
+def _son_tarama(aktif):
+    """Üst karttaki 'son tarama' bilgisi açık olan sekmenin kendi taramasıdır (fiyat: saat başı, BuyBox: günlük)."""
+    if aktif == BUYBOX_SEKMESI:
+        _, bb_zaman = load_buybox()
+        bb_yas = tarama_yasi_dk(bb_zaman)
+        return _tarih_metni(bb_zaman), (bb_yas is None or bb_yas <= BB_GECIKME_ESIGI_DK), "Son BuyBox taraması"
+    return _tarih_metni(_guncelleme), (_yas is None or _yas <= GECIKME_ESIGI_DK), "Son fiyat taraması"
 
-sekme_fiyat, sekme_buybox = st.tabs([FIYAT_SEKMESI, BUYBOX_SEKMESI], key="ana_sekme", on_change="rerun")
-with sekme_fiyat:
-    fiyat_buybox_sayfasi(_df_fiyat, _yas)
-with sekme_buybox:
+
+_aktif = tasarim.ust_baslik([FIYAT_SEKMESI, BUYBOX_SEKMESI], _son_tarama)
+if _aktif == BUYBOX_SEKMESI:
     buybox_sayfasi()
+else:
+    fiyat_buybox_sayfasi(_df_fiyat, _yas)
 tasarim.alt_bant()
