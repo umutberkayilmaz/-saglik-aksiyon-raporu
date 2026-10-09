@@ -474,7 +474,7 @@ def ust_baslik(sekmeler: list[str], son_tarama_fn) -> str:
 def baslik(esik: float = 5) -> None:
     sol, sag = st.columns([1, 1])
     with sol:
-        st.markdown('<div class="pt-title"><h1>Ürün Takibi</h1></div>', unsafe_allow_html=True)
+        pass   # sayfa başlığı kaldırıldı; sekme adı üstteki kartta zaten görünüyor
     with sag:
         e = f"{esik:g}"
         st.markdown(f"""<div class="pt-legend" style="padding-top:22px"><span style="color:#6A7E72">Renk kodu</span>
