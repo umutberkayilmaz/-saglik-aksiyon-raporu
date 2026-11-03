@@ -1133,7 +1133,16 @@ table.yt-harita td.h { text-align:center !important; border-radius:7px; height:3
   cursor:help; }
 table.yt-harita td.h small { display:block; font-size:9.5px; font-weight:600; opacity:.8; }
 table.yt-harita td.bos { background:#F6F8F7; color:#C3CDC7; font-weight:600; }
-table.yt-harita td.az { opacity:.55; }
+table.yt-harita td.az { opacity:.5; outline:1.5px dashed #B9C4BE; outline-offset:-3px; }
+table.yt-harita td.h small { white-space:nowrap; }
+.yt-nasil { display:flex; gap:14px; align-items:center; background:#F7FAF8; border:1px solid #E1EAE4; border-radius:14px;
+  padding:10px 14px; margin:0 0 12px; font-size:13px; line-height:1.5; color:#3E4A44; }
+.yt-nasil b { color:#15261D; }
+.yt-ornek-hucre { flex:none; display:inline-flex; flex-direction:column; align-items:center; justify-content:center;
+  width:92px; height:42px; border-radius:8px; font-weight:800; font-size:14px; }
+.yt-ornek-hucre small { font-size:10px; font-weight:600; opacity:.85; }
+.yt-az-ornek { display:inline-block; padding:0 6px; border-radius:5px; background:#F6D5CF; opacity:.6;
+  outline:1.5px dashed #B9C4BE; outline-offset:-2px; font-weight:700; }
 table.yt-harita tr:hover td.urun b { text-decoration:underline; }
 table.yt-harita td.ayrac, table.yt-harita th.ayrac { width:8px; min-width:8px; padding:0 !important; }
 .yt-lejant { display:flex; gap:14px; align-items:center; flex-wrap:wrap; font-size:11.5px; color:#6A7E72; padding-top:10px; }
@@ -1161,7 +1170,7 @@ def yorum_baslik(zaman: str = "") -> None:
     with sag:
         if zaman:
             st.markdown(f'<div class="pt-legend" style="padding-top:22px"><span style="color:#6A7E72">Yorum verisi: '
-                        f'<b style="color:#15261D">{html.escape(zaman)}</b> · Pazartesi ve Perşembe güncellenir</span></div>',
+                        f'<b style="color:#15261D">{html.escape(zaman)}</b> · her Pazartesi güncellenir</span></div>',
                         unsafe_allow_html=True)
 
 
@@ -1446,7 +1455,7 @@ def tema_isi_haritasi(satirlar: list[dict], temalar: list[dict], min_yorum: int 
         a, b = st.columns([1.6, 1])
         with a:
             st.markdown('<div class="yt-head"><span class="ttl">Ürün × tema haritası</span>'
-                        '<span>Her hücre: o ürünün okunan yorumlarında temanın geçme oranı</span></div>',
+                        '<span>Hangi ürün hangi konuda şikayet / övgü alıyor</span></div>',
                         unsafe_allow_html=True)
         with b:
             secim = st.segmented_control("Harita", ["Şikayetler", "Memnuniyet"], default="Şikayetler",
@@ -1506,20 +1515,43 @@ def tema_isi_haritasi(satirlar: list[dict], temalar: list[dict], min_yorum: int 
                 bg, yazi = _harita_rengi(oran, ust, mod)
                 sik = (r.get("sikayet_say") or {}).get(t["tema"], 0)
                 mem = (r.get("memnun_say") or {}).get(t["tema"], 0)
-                ipucu = (f'{r.get("kod")} · {t["tema"]}: {sik} şikayet, {mem} memnuniyet '
-                         f'({n} yorum içinde)' + (" · az yorum, dikkatli yorumlayın" if n < min_yorum else ""))
+                tur = "şikayet" if mod == "sikayet" else "memnuniyet"
+                ipucu = (f'{r.get("kod")} · {t["tema"]}\n{n} yorumun {adet} tanesinde {tur} var (%{oran:.0f}).\n'
+                         f'Bu konuda toplam: {sik} şikayet, {mem} memnuniyet.'
+                         + (f"\nDikkat: bu ürünün sadece {n} yorumu var; oran az veriye dayanıyor." if n < min_yorum else ""))
                 az = " az" if n < min_yorum else ""
                 govde += (f'<td class="h{az}" style="background:{bg};color:{yazi}" title="{html.escape(ipucu, quote=True)}">'
-                          f'%{oran:.0f}<small>{adet}</small></td>')
+                          f'%{oran:.0f}<small>{adet} / {n} yorum</small></td>')
             govde += "</tr>"
 
-        a_, b_ = _HARITA_RENK[mod]
+        # "nasıl okunur" örneği: yeterli yorumu olan en belirgin hücre
+        ornek = None
+        for r in satirlar:
+            n = r.get("okunan") or 0
+            if n < min_yorum:
+                continue
+            for t in kolonlar:
+                adet = (r.get(alan) or {}).get(t["tema"], 0)
+                if adet and (ornek is None or adet / n > ornek[2] / ornek[3]):
+                    ornek = (r.get("kod"), t["tema"], adet, n)
+        tur = "şikayet ediyor" if mod == "sikayet" else "memnuniyetini belirtiyor"
         olcek = "".join(f'<i style="background:{_harita_rengi(ust * k / 4, ust, mod)[0]}"></i>' for k in range(5))
+        if ornek:
+            kod, tema, adet, n = ornek
+            bg, yazi = _harita_rengi(adet / n * 100, ust, mod)
+            nasil = (f'<div class="yt-nasil"><span class="yt-ornek-hucre" style="background:{bg};color:{yazi}">'
+                     f'%{adet / n * 100:.0f}<small>{adet} / {n} yorum</small></span>'
+                     f'<div><b>Nasıl okunur?</b> {html.escape(str(kod))} için okunan <b>{n} yorumun {adet} tanesinde</b> '
+                     f'müşteri <b>{html.escape(tema.lower())}</b> konusunda {tur} (oran: <b>%{adet / n * 100:.0f}</b>). '
+                     'Renk koyulaştıkça oran yükselir. Boş hücre: o konuda hiç yorum yok.</div></div>')
+        else:
+            nasil = ""
         st.markdown(
+            nasil +
             f'<div class="yt-harita-kutu"><table class="yt-harita" lang="tr"><thead><tr>{ust_satir}</tr><tr>{bas}</tr></thead>'
             f'<tbody>{govde}</tbody></table></div>'
             f'<div class="yt-lejant"><span>%0 <span class="olcek">{olcek}</span> %{ust:.0f}+</span>'
-            '<span>Büyük sayı: yorumların yüzde kaçında geçiyor · küçük sayı: yorum adedi</span>'
-            f'<span>Soluk hücre: {min_yorum}\'dan az yorum</span>'
-            '<span>Hücrenin üzerine gelince şikayet ve memnuniyet sayıları birlikte görünür</span></div>',
+            '<span><b>%</b> = o ürünün yorumlarının yüzde kaçında geçiyor · <b>4 / 8 yorum</b> = 8 yorumun 4\'ünde</span>'
+            f'<span><span class="yt-az-ornek">soluk</span> = ürünün {min_yorum}\'dan az yorumu var, oran yanıltıcı olabilir</span>'
+            '<span>Hücrenin üzerine gelince açıklama çıkar</span></div>',
             unsafe_allow_html=True)
