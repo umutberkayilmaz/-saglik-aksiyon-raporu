@@ -826,6 +826,7 @@ def yorum_sayfasi():
             "sikayet_orani": sum(1 for k in uk if k["sikayet"]) / len(uk) * 100 if uk else None,
             "sikayetler": _tema_sayimi(uk, "sikayet").most_common(3),
             "memnuniyetler": _tema_sayimi(uk, "memnuniyet").most_common(3),
+            "sikayet_say": dict(_tema_sayimi(uk, "sikayet")), "memnun_say": dict(_tema_sayimi(uk, "memnuniyet")),
         })
     satirlar.sort(key=lambda s: (s["sikayet_orani"] is None, -(s["sikayet_orani"] or 0)))
 
@@ -834,6 +835,17 @@ def yorum_sayfasi():
         zaman_ek = (datetime.now(timezone.utc) + timedelta(hours=3)).strftime("%d-%m-%Y")
         st.download_button("📥 Excel'e Aktar", _yorum_excel(satirlar, kayitlar), f"Yorum_Analizi_{zaman_ek}.xlsx",
                            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", key="yr_excel")
+    # ---- ürün × tema ısı haritası ----
+    tum_temalar = []
+    for alan in ("sikayet", "memnuniyet"):
+        for x in _tema_listesi(_tema_sayimi(kayitlar, alan)):
+            if x["tema"] not in [t["tema"] for t in tum_temalar]:
+                tum_temalar.append({"tema": x["tema"], "grup": x["grup"]})
+    sira = {"Ürün": 0, "Satıcı & Kargo": 1}
+    sik_say = _tema_sayimi(kayitlar, "sikayet")
+    tum_temalar.sort(key=lambda t: (sira.get(t["grup"], 2), -sik_say.get(t["tema"], 0)))
+    tasarim.tema_isi_haritasi(satirlar, tum_temalar)
+    st.markdown("<div style='height:18px'></div>", unsafe_allow_html=True)
     tasarim.yorum_urun_tablosu(satirlar)
     st.markdown("<div style='height:18px'></div>", unsafe_allow_html=True)
 

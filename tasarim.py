@@ -1107,6 +1107,31 @@ _YORUM_CSS = """<style>
 .yt-braun { font-size:10px; font-weight:800; background:#178A4E; color:#fff; padding:1px 6px; border-radius:5px; letter-spacing:.03em; }
 .yt-yigin { display:flex; width:130px; height:9px; border-radius:99px; overflow:hidden; background:#F1F4F2; margin:0 auto; cursor:help; }
 .yt-yigin i { display:block; height:100%; }
+.st-key-pt_yorum_harita { background:#FFFFFF; border:1px solid #DCE9E1; border-radius:20px;
+  box-shadow:0 6px 24px rgba(20,70,45,.06); padding:20px 22px 14px; }
+.yt-harita-kutu { overflow-x:auto; }
+table.yt-harita { border-collapse:separate !important; border-spacing:3px; width:100%; font-size:12px; color:#15261D;
+  table-layout:fixed; margin:0 !important; }
+table.yt-harita tr, table.yt-harita th, table.yt-harita td { border:0 !important; background-clip:padding-box; }
+table.yt-harita th { background:transparent !important; }
+table.yt-harita th { font-size:10.5px; font-weight:700; color:#52675A; text-align:center; vertical-align:bottom;
+  padding:4px 2px 6px; line-height:1.25; min-width:62px; }
+table.yt-harita th.grp { font-size:9.5px; letter-spacing:.07em; text-transform:uppercase; color:#8A9A90; padding:0 2px 2px;
+  border-bottom:1px dashed #E1EAE4; }
+table.yt-harita th.urun, table.yt-harita td.urun { text-align:left !important; width:160px; white-space:nowrap;
+  padding:2px 8px 2px 0 !important; overflow:hidden; text-overflow:ellipsis; }
+table.yt-harita td.urun b { font-size:12.5px; color:#10281B; }
+table.yt-harita td.urun small { display:block; font-size:10.5px; color:#7A8C81; }
+table.yt-harita td.h { text-align:center !important; border-radius:7px; height:34px; padding:2px !important; font-weight:800; font-variant-numeric:tabular-nums;
+  cursor:help; }
+table.yt-harita td.h small { display:block; font-size:9.5px; font-weight:600; opacity:.8; }
+table.yt-harita td.bos { background:#F6F8F7; color:#C3CDC7; font-weight:600; }
+table.yt-harita td.az { opacity:.55; }
+table.yt-harita tr:hover td.urun b { text-decoration:underline; }
+table.yt-harita td.ayrac, table.yt-harita th.ayrac { width:8px; min-width:8px; padding:0 !important; }
+.yt-lejant { display:flex; gap:14px; align-items:center; flex-wrap:wrap; font-size:11.5px; color:#6A7E72; padding-top:10px; }
+.yt-lejant .olcek { display:inline-flex; gap:2px; vertical-align:middle; }
+.yt-lejant .olcek i { width:22px; height:10px; border-radius:3px; display:inline-block; }
 </style>"""
 
 
@@ -1267,3 +1292,102 @@ def ornek_yorum_listesi(yorumlar: list[dict], vurgu: str = "") -> None:
                   f'<span>· {html.escape(y.get("tarih_metni", ""))}</span>{temalar}</div>'
                   f'<p>{html.escape(y.get("metin", ""))}</p></div>')
     st.markdown(govde, unsafe_allow_html=True)
+
+
+_HARITA_RENK = {"sikayet": ((253, 236, 233), (196, 49, 32)), "memnuniyet": ((232, 246, 237), (23, 128, 72))}
+
+
+def _harita_rengi(oran: float, ust: float, mod: str):
+    """oran (0..ust) -> (arka plan, yazı rengi). Açıktan koyuya doğrusal geçiş."""
+    a, b = _HARITA_RENK[mod]
+    t = max(0.0, min(1.0, oran / ust)) if ust else 0
+    t = t ** 0.75                       # küçük oranlar da ayırt edilsin
+    rgb = tuple(round(a[i] + (b[i] - a[i]) * t) for i in range(3))
+    yazi = "#FFFFFF" if t > 0.55 else ("#7A1F14" if mod == "sikayet" else "#0F4A2A")
+    return f"rgb{rgb}", yazi
+
+
+def tema_isi_haritasi(satirlar: list[dict], temalar: list[dict], min_yorum: int = 10) -> None:
+    """Ürün × tema matrisi. satirlar: kod, tam_ad, grup, okunan, sikayet_say{tema:n}, memnun_say{tema:n}
+    temalar: [{"tema", "grup"}] sütun sırası."""
+    with st.container(key="pt_yorum_harita"):
+        a, b = st.columns([1.6, 1])
+        with a:
+            st.markdown('<div class="yt-head"><span class="ttl">Ürün × tema haritası</span>'
+                        '<span>Her hücre: o ürünün okunan yorumlarında temanın geçme oranı</span></div>',
+                        unsafe_allow_html=True)
+        with b:
+            secim = st.segmented_control("Harita", ["Şikayetler", "Memnuniyet"], default="Şikayetler",
+                                         key="yr_harita_mod", label_visibility="collapsed") or "Şikayetler"
+        mod = "sikayet" if secim == "Şikayetler" else "memnuniyet"
+        alan = "sikayet_say" if mod == "sikayet" else "memnun_say"
+        if not satirlar or not temalar:
+            st.markdown('<div class="yt-bos">Bu filtrede veri yok.</div>', unsafe_allow_html=True)
+            return
+
+        # sütunları seçili moda göre: sadece en az bir üründe geçen temalar
+        kolonlar = [t for t in temalar if any((r.get(alan) or {}).get(t["tema"]) for r in satirlar)]
+        if not kolonlar:
+            st.markdown('<div class="yt-bos">Bu filtrede tema geçen yorum yok.</div>', unsafe_allow_html=True)
+            return
+        oranlar = [(r.get(alan) or {}).get(t["tema"], 0) / r["okunan"] * 100
+                   for r in satirlar if r.get("okunan") for t in kolonlar]
+        ust = max(15.0, max(oranlar) if oranlar else 0)     # renk ölçeğinin üst sınırı (en az %15)
+
+        # grup başlık satırı
+        gruplar, onceki = [], None
+        for t in kolonlar:
+            if t["grup"] != onceki:
+                gruplar.append([t["grup"], 0])
+                onceki = t["grup"]
+            gruplar[-1][1] += 1
+        ust_satir = '<th class="urun"></th>'
+        for i, (g, n) in enumerate(gruplar):
+            if i:
+                ust_satir += '<th class="ayrac"></th>'
+            ust_satir += f'<th class="grp" colspan="{n}">{html.escape(g)}</th>'
+        bas = '<th class="urun">Ürün</th>'
+        onceki = None
+        for t in kolonlar:
+            if onceki and t["grup"] != onceki:
+                bas += '<th class="ayrac"></th>'
+            bas += f'<th>{html.escape(t["tema"]).replace(" / ", " /<br>")}</th>'
+            onceki = t["grup"]
+
+        sirali = sorted(satirlar, key=lambda r: -sum((r.get(alan) or {}).values()) / max(1, r.get("okunan") or 1))
+        govde = ""
+        for r in sirali:
+            n = r.get("okunan") or 0
+            ad = html.escape(" ".join(str(r.get("tam_ad") or "").split()), quote=True)
+            govde += (f'<tr><td class="urun" title="{ad}"><b>{html.escape(str(r.get("kod") or ""))}</b>'
+                      f'<small>{html.escape(str(r.get("grup") or ""))} · {n} yorum</small></td>')
+            onceki = None
+            for t in kolonlar:
+                if onceki and t["grup"] != onceki:
+                    govde += '<td class="ayrac"></td>'
+                onceki = t["grup"]
+                adet = (r.get(alan) or {}).get(t["tema"], 0)
+                if not n or not adet:
+                    govde += '<td class="h bos">·</td>'
+                    continue
+                oran = adet / n * 100
+                bg, yazi = _harita_rengi(oran, ust, mod)
+                sik = (r.get("sikayet_say") or {}).get(t["tema"], 0)
+                mem = (r.get("memnun_say") or {}).get(t["tema"], 0)
+                ipucu = (f'{r.get("kod")} · {t["tema"]}: {sik} şikayet, {mem} memnuniyet '
+                         f'({n} yorum içinde)' + (" · az yorum, dikkatli yorumlayın" if n < min_yorum else ""))
+                az = " az" if n < min_yorum else ""
+                govde += (f'<td class="h{az}" style="background:{bg};color:{yazi}" title="{html.escape(ipucu, quote=True)}">'
+                          f'%{oran:.0f}<small>{adet}</small></td>')
+            govde += "</tr>"
+
+        a_, b_ = _HARITA_RENK[mod]
+        olcek = "".join(f'<i style="background:{_harita_rengi(ust * k / 4, ust, mod)[0]}"></i>' for k in range(5))
+        st.markdown(
+            f'<div class="yt-harita-kutu"><table class="yt-harita" lang="tr"><thead><tr>{ust_satir}</tr><tr>{bas}</tr></thead>'
+            f'<tbody>{govde}</tbody></table></div>'
+            f'<div class="yt-lejant"><span>%0 <span class="olcek">{olcek}</span> %{ust:.0f}+</span>'
+            '<span>Büyük sayı: yorumların yüzde kaçında geçiyor · küçük sayı: yorum adedi</span>'
+            f'<span>Soluk hücre: {min_yorum}\'dan az yorum</span>'
+            '<span>Hücrenin üzerine gelince şikayet ve memnuniyet sayıları birlikte görünür</span></div>',
+            unsafe_allow_html=True)
