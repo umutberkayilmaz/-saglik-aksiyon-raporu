@@ -711,25 +711,77 @@ def _tema_listesi(sayac):
     return sorted(liste, key=lambda x: (sira.get(x["grup"], 2), -x["adet"]))
 
 
-def _yorum_excel(ozet_satirlari, kayitlar):
+def _yorum_excel(satirlar, kayitlar, platform):
     out = io.BytesIO()
     with pd.ExcelWriter(out, engine="openpyxl") as w:
         pd.DataFrame([{
-            "Ürün Kodu": s["kod"], "Ürün Adı": s["tam_ad"], "Alt Grup": s["grup"],
-            "TY Puan": (s["ty"] or {}).get("ortalama"), "TY Değerlendirme": (s["ty"] or {}).get("toplam"),
-            "HB Puan": (s["hb"] or {}).get("ortalama"), "HB Değerlendirme": (s["hb"] or {}).get("toplam"),
-            "Son Yorumlar Ortalama": s["son_ort"], "Okunan Yorum": s["okunan"],
-            "Şikayet Oranı (%)": s["sikayet_orani"],
+            "Platform": platform, "Ürün Kodu": s["kod"], "Ürün Adı": s["tam_ad"], "Alt Grup": s["grup"],
+            "Puan": s["puan"], "Değerlendirme": s["toplam"], "Yazılı Yorum": s["yorumlu"],
+            "Haftalık Ortalama Yorum": round(s["haftalik"], 1) if s["haftalik"] is not None else None,
+            "Son Yorumlar Ortalama": round(s["son_ort"], 2) if s["son_ort"] is not None else None,
+            "Okunan Yorum": s["okunan"],
+            "Şikayet Oranı (%)": round(s["sikayet_orani"], 1) if s["sikayet_orani"] is not None else None,
             "En Sık Şikayetler": ", ".join(f"{t} ({n})" for t, n in s["sikayetler"][:3]),
             "En Çok Beğenilenler": ", ".join(f"{t} ({n})" for t, n in s["memnuniyetler"][:3]),
-        } for s in ozet_satirlari]).to_excel(w, index=False, sheet_name="Ürün Özeti")
+            "Link": s["link"],
+        } for s in satirlar]).to_excel(w, index=False, sheet_name="Ürün Özeti")
         pd.DataFrame([{
-            "Ürün Kodu": k["kod"], "Platform": k["platform"], "Tarih": k["tarih_metni"], "Puan": k["puan"],
+            "Ürün Kodu": k["kod"], "Tarih": k["tarih_metni"], "Puan": k["puan"],
             "Satıcı": k["satici"], "Braun Shop": "Evet" if k["braun"] else "Hayır",
             "Şikayet Temaları": ", ".join(k["sikayet"]), "Memnuniyet Temaları": ", ".join(k["memnuniyet"]),
             "Yorum": k["metin"],
         } for k in kayitlar]).to_excel(w, index=False, sheet_name="Yorumlar")
     return out.getvalue()
+
+
+def _json_oku(v, varsayilan):
+    try:
+        return json.loads(v) if v else varsayilan
+    except (ValueError, TypeError):
+        return varsayilan
+
+
+def _haftalik_seri(haftalik: dict, kapsam: str):
+    """{'2026-10-26': 4, ...} -> [(hafta, adet|None)], kapsam öncesi haftalar None (bilinmiyor)."""
+    seri = []
+    for h in sorted(haftalik):
+        bilinmiyor = bool(kapsam) and (datetime.strptime(h, "%Y-%m-%d") + timedelta(days=6)).strftime("%Y-%m-%d") < kapsam
+        seri.append((h, None if bilinmiyor else int(haftalik[h] or 0)))
+    return seri
+
+
+def _haftalik_ortalama(seri):
+    """Tamamlanmış haftaların ortalaması (içinde bulunulan yarım hafta hariç)."""
+    tam = [n for h, n in seri[:-1] if n is not None]
+    return sum(tam) / len(tam) if tam else None
+
+
+def _hiz_grafigi(seri, renk: str, baslik: str):
+    import altair as alt
+    df = pd.DataFrame([{"Hafta": datetime.strptime(h, "%Y-%m-%d"), "Yorum": n,
+                        "Etiket": datetime.strptime(h, "%Y-%m-%d").strftime("%d.%m"),
+                        "Durum": "Bu hafta (devam ediyor)" if i == len(seri) - 1 else "Tamamlanan hafta"}
+                       for i, (h, n) in enumerate(seri) if n is not None])
+    if df.empty:
+        st.markdown('<div class="yt-bos">Bu seçim için haftalık yorum verisi yok.</div>', unsafe_allow_html=True)
+        return
+    ort = _haftalik_ortalama(seri)
+    taban = alt.Chart(df).encode(x=alt.X("Etiket:N", sort=None, title=None, axis=alt.Axis(labelAngle=0, labelColor="#6A7E72")))
+    cubuk = taban.mark_bar(cornerRadiusTopLeft=5, cornerRadiusTopRight=5, size=26).encode(
+        y=alt.Y("Yorum:Q", title=None, axis=alt.Axis(grid=True, gridColor="#EEF3F0", labelColor="#6A7E72", tickMinStep=1)),
+        color=alt.Color("Durum:N", scale=alt.Scale(domain=["Tamamlanan hafta", "Bu hafta (devam ediyor)"],
+                                                   range=[renk, "#D8DEDA"]), legend=None),
+        tooltip=[alt.Tooltip("Etiket:N", title="Hafta başı"), alt.Tooltip("Yorum:Q", title="Yazılı yorum"),
+                 alt.Tooltip("Durum:N", title="")])
+    yazi = taban.mark_text(dy=-8, fontSize=11, fontWeight="bold", color="#3E4A44").encode(
+        y="Yorum:Q", text="Yorum:Q")
+    katmanlar = [cubuk, yazi]
+    if ort is not None:
+        cizgi = alt.Chart(pd.DataFrame({"o": [ort]})).mark_rule(color="#15261D", strokeDash=[5, 4], size=1.5).encode(y="o:Q")
+        katmanlar.append(cizgi)
+    st.altair_chart(alt.layer(*katmanlar).properties(height=240, title=alt.TitleParams(baslik, anchor="start",
+                    fontSize=13, color="#15261D")).configure_view(strokeWidth=0).configure(background="#FFFFFF"),
+                    use_container_width=True, theme=None)
 
 
 def yorum_sayfasi():
@@ -744,27 +796,25 @@ def yorum_sayfasi():
     gorsel_map = {}
     if fiyat_df is not None and "Ürün Kodu" in fiyat_df.columns and "Görsel" in fiyat_df.columns:
         gorsel_map = {str(k).strip(): v for k, v in zip(fiyat_df["Ürün Kodu"], fiyat_df["Görsel"]) if v}
-
     tum = _yorum_kayitlari(yorum_df) if yorum_df is not None and not yorum_df.empty else []
 
-    # ---- filtreler ----
-    c1, c2, c3, c4, c5 = st.columns([2.0, 1.75, 1.7, 1.6, 1])
-    with c1:
-        platform = st.segmented_control("Platform", ["Tümü", "Trendyol", "Hepsiburada"], default="Tümü",
-                                        key="yr_platform") or "Tümü"
+    # ---- platform seçimi (iki platform ayrı ayrı gösterilir) ----
+    platform = st.segmented_control("Platform", ["Trendyol", "Hepsiburada"], default="Trendyol", key="yr_platform",
+                                    label_visibility="collapsed") or "Trendyol"
+    renk = tasarim.platform_temasi(platform)
+
+    c2, c3, c4, c5 = st.columns([1.6, 2.0, 1.8, 1])
     with c2:
         satici = st.segmented_control("Satıcı", ["Tüm satıcılar", "Braun Shop"], default="Tüm satıcılar",
                                       key="yr_satici", help="Braun Shop: sadece Braun Shop'tan alan müşterilerin yorumları. "
-                                      "Platform puanı ve toplam değerlendirme her zaman tüm satıcılarındır.") or "Tüm satıcılar"
+                                      "Puan ve değerlendirme sayısı her zaman ürünün tamamıdır (tüm satıcılar).") or "Tüm satıcılar"
     with c3:
         ara = st.text_input("Ürün ara", placeholder="Ürün adı ya da kodu", key="yr_ara")
     with c4:
         gruplar = sorted({str(g) for g in ozet_df.get("Alt Grup", []) if str(g).strip()})
         secilen = st.multiselect("Alt Grup", gruplar, placeholder="Tümü", key="yr_grup")
 
-    ozet = ozet_df.copy()
-    if platform != "Tümü":
-        ozet = ozet[ozet["Platform"] == platform]
+    ozet = ozet_df[ozet_df["Platform"] == platform].copy()
     if secilen:
         ozet = ozet[ozet["Alt Grup"].isin(secilen)]
     if ara and ara.strip():
@@ -772,81 +822,114 @@ def yorum_sayfasi():
         ozet = ozet[(ozet["Ürün Adı"].str.casefold().str.contains(a, regex=False))
                     | (ozet["Ürün Kodu"].str.casefold().str.contains(a, regex=False))]
     kodlar = set(ozet["Ürün Kodu"])
-    kayitlar = [k for k in tum if k["kod"] in kodlar and (platform == "Tümü" or k["platform"] == platform)
+    kayitlar = [k for k in tum if k["kod"] in kodlar and k["platform"] == platform
                 and (satici != "Braun Shop" or k["braun"])]
 
-    # ---- KPI ----
-    toplam = sum(_sayi(v) or 0 for v in ozet["Toplam Değerlendirme"])
-    agirlik = sum((_sayi(t) or 0) * (_sayi(o) or 0) for t, o in zip(ozet["Toplam Değerlendirme"], ozet["Ortalama Puan"])
-                  if _sayi(o) is not None)
-    ort = agirlik / toplam if toplam else None
-    puanlar = [k["puan"] for k in kayitlar if k["puan"] is not None]
-    sikayetli = sum(1 for k in kayitlar if k["sikayet"])
-    platform_say = {p: sum(_sayi(v) or 0 for v in ozet[ozet["Platform"] == p]["Toplam Değerlendirme"])
-                    for p in ("Trendyol", "Hepsiburada")}
-    tasarim.yorum_kpi({
-        "toplam": toplam,
-        "toplam_alt": " · ".join(f"{'TY' if p == 'Trendyol' else 'HB'} {int(n):,}".replace(",", ".")
-                                 for p, n in platform_say.items() if n),
-        "ortalama": ort,
-        "ortalama_alt": (f"Okunan son yorumlarda: {sum(puanlar) / len(puanlar):.2f}".replace(".", ",")
-                         + (" (Braun Shop)" if satici == "Braun Shop" else "")) if puanlar else "Platform puanı",
-        "okunan": len(kayitlar),
-        "okunan_alt": (f"Braun Shop'tan alanlar · {len({k['kod'] for k in kayitlar})} ürün" if satici == "Braun Shop"
-                       else f"Ürün ve platform başına son 100 · Braun Shop: {sum(1 for k in kayitlar if k['braun'])}"),
-        "sikayet_orani": sikayetli / len(kayitlar) * 100 if kayitlar else None,
-        "sikayet_alt": f"{sikayetli} yorum",
-    })
-
-    # ---- tema panelleri ----
-    tasarim.tema_panelleri(_tema_listesi(_tema_sayimi(kayitlar, "sikayet")),
-                           _tema_listesi(_tema_sayimi(kayitlar, "memnuniyet")), len(kayitlar))
-    st.markdown("<div style='height:18px'></div>", unsafe_allow_html=True)
-
-    # ---- ürün tablosu ----
+    # ---- ürün satırları ----
     satirlar = []
-    for kod, g in ozet.groupby("Ürün Kodu", sort=False):
-        ilk = g.iloc[0]
-
-        def platform_ozeti(p):
-            x = g[g["Platform"] == p]
-            if x.empty:
-                return None
-            x = x.iloc[0]
-            return {"ortalama": _sayi(x.get("Ortalama Puan")), "toplam": _sayi(x.get("Toplam Değerlendirme")),
-                    "durum": str(x.get("Durum", "") or "")}
+    for _, x in ozet.iterrows():
+        kod = str(x.get("Ürün Kodu", "")).strip()
         uk = [k for k in kayitlar if k["kod"] == kod]
         pu = [k["puan"] for k in uk if k["puan"] is not None]
-        dagilim = {y: sum(1 for p in pu if int(p) == y) for y in (1, 2, 3, 4, 5)}
+        ilanlar = _json_oku(x.get("İlanlar"), [])
+        link = str(x.get("Link", "") or "").strip()
+        if ilanlar:     # en çok değerlendirilen ilan ana link
+            link = max(ilanlar, key=lambda i: i.get("toplam") or 0).get("link") or link
+        seri = _haftalik_seri(_json_oku(x.get("Haftalık Yorum"), {}), str(x.get("Kapsam Başlangıç", "") or ""))
         satirlar.append({
-            "kod": kod, "tam_ad": str(ilk.get("Ürün Adı", "")), "grup": str(ilk.get("Alt Grup", "")),
-            "gorsel": str(gorsel_map.get(kod, "") or ""),
-            "ty": platform_ozeti("Trendyol"), "hb": platform_ozeti("Hepsiburada"),
-            "okunan": len(uk), "son_ort": sum(pu) / len(pu) if pu else None, "dagilim": dagilim,
+            "kod": kod, "tam_ad": str(x.get("Ürün Adı", "")), "grup": str(x.get("Alt Grup", "")),
+            "gorsel": str(gorsel_map.get(kod, "") or ""), "link": link, "ilanlar": ilanlar,
+            "puan": _sayi(x.get("Ortalama Puan")), "toplam": _sayi(x.get("Toplam Değerlendirme")),
+            "yorumlu": _sayi(x.get("Yorumlu Değerlendirme")), "durum": str(x.get("Durum", "") or ""),
+            "seri": seri, "haftalik": _haftalik_ortalama(seri), "kapsam": str(x.get("Kapsam Başlangıç", "") or ""),
+            "okunan": len(uk), "son_ort": sum(pu) / len(pu) if pu else None,
+            "dagilim": {y: sum(1 for p in pu if int(p) == y) for y in (1, 2, 3, 4, 5)},
             "sikayet_orani": sum(1 for k in uk if k["sikayet"]) / len(uk) * 100 if uk else None,
             "sikayetler": _tema_sayimi(uk, "sikayet").most_common(3),
             "memnuniyetler": _tema_sayimi(uk, "memnuniyet").most_common(3),
             "sikayet_say": dict(_tema_sayimi(uk, "sikayet")), "memnun_say": dict(_tema_sayimi(uk, "memnuniyet")),
         })
-    satirlar.sort(key=lambda s: (s["sikayet_orani"] is None, -(s["sikayet_orani"] or 0)))
+    link_map = {s["kod"]: s["link"] for s in satirlar}
+    for k in kayitlar:
+        k["link"] = link_map.get(k["kod"], "")
 
-    with c5:
-        st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
-        zaman_ek = (datetime.now(timezone.utc) + timedelta(hours=3)).strftime("%d-%m-%Y")
-        st.download_button("📥 Excel'e Aktar", _yorum_excel(satirlar, kayitlar), f"Yorum_Analizi_{zaman_ek}.xlsx",
-                           "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", key="yr_excel")
-    # ---- ürün × tema ısı haritası ----
+    # ---- KPI ----
+    toplam = sum(s["toplam"] or 0 for s in satirlar)
+    agirlik = sum((s["toplam"] or 0) * (s["puan"] or 0) for s in satirlar if s["puan"] is not None)
+    yorumlu = [s["yorumlu"] for s in satirlar if s["yorumlu"] is not None]
+    hizlar = [s["haftalik"] for s in satirlar if s["haftalik"] is not None]
+    sikayetli = sum(1 for k in kayitlar if k["sikayet"])
+    puanlar = [k["puan"] for k in kayitlar if k["puan"] is not None]
+    tasarim.yorum_platform_bandi(platform, len(satirlar))
+    tasarim.yorum_kpi({
+        "toplam": toplam,
+        "toplam_alt": (f"{int(sum(yorumlu)):,} yazılı yorum".replace(",", ".") if yorumlu
+                       else "yıldızlı + yorumlu tüm değerlendirmeler") + " · tüm satıcılar",
+        "ortalama": agirlik / toplam if toplam else None,
+        "ortalama_alt": "Değerlendirme sayısına göre ağırlıklı" + (
+            f" · son yorumlarda {sum(puanlar) / len(puanlar):.2f}".replace(".", ",") if puanlar else ""),
+        "hiz": sum(hizlar) if hizlar else None,
+        "hiz_alt": f"Son {len(satirlar[0]['seri']) - 1 if satirlar and satirlar[0]['seri'] else 11} tamamlanan haftanın ortalaması",
+        "sikayet_orani": sikayetli / len(kayitlar) * 100 if kayitlar else None,
+        "sikayet_alt": f"{sikayetli} / {len(kayitlar)} yorum" + (" · Braun Shop" if satici == "Braun Shop" else ""),
+    })
+
+    # ---- tema panelleri + harita ----
+    tasarim.tema_panelleri(_tema_listesi(_tema_sayimi(kayitlar, "sikayet")),
+                           _tema_listesi(_tema_sayimi(kayitlar, "memnuniyet")), len(kayitlar))
+    st.markdown("<div style='height:18px'></div>", unsafe_allow_html=True)
     tum_temalar = []
     for alan in ("sikayet", "memnuniyet"):
-        for x in _tema_listesi(_tema_sayimi(kayitlar, alan)):
-            if x["tema"] not in [t["tema"] for t in tum_temalar]:
-                tum_temalar.append({"tema": x["tema"], "grup": x["grup"]})
+        for t in _tema_listesi(_tema_sayimi(kayitlar, alan)):
+            if t["tema"] not in [y["tema"] for y in tum_temalar]:
+                tum_temalar.append({"tema": t["tema"], "grup": t["grup"]})
     sira = {"Ürün": 0, "Satıcı & Kargo": 1}
     sik_say = _tema_sayimi(kayitlar, "sikayet")
     tum_temalar.sort(key=lambda t: (sira.get(t["grup"], 2), -sik_say.get(t["tema"], 0)))
     tasarim.tema_isi_haritasi(satirlar, tum_temalar)
     st.markdown("<div style='height:18px'></div>", unsafe_allow_html=True)
-    tasarim.yorum_urun_tablosu(satirlar)
+
+    # ---- ürün tablosu ----
+    satirlar.sort(key=lambda s: -(s["toplam"] or 0))
+    with c5:
+        st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
+        zaman_ek = (datetime.now(timezone.utc) + timedelta(hours=3)).strftime("%d-%m-%Y")
+        st.download_button("📥 Excel'e Aktar", _yorum_excel(satirlar, kayitlar, platform),
+                           f"Yorum_Analizi_{platform}_{zaman_ek}.xlsx",
+                           "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", key="yr_excel")
+    tasarim.yorum_urun_tablosu(satirlar, platform)
+    st.markdown("<div style='height:18px'></div>", unsafe_allow_html=True)
+
+    # ---- yorum hızı ----
+    with st.container(key="pt_yorum_hiz"):
+        st.markdown('<div class="yt-head"><span class="ttl">Yorum hızı</span><span>Haftalık yazılı yorum sayısı · '
+                    'kesikli çizgi: tamamlanan haftaların ortalaması</span></div>', unsafe_allow_html=True)
+        h1, h2 = st.columns([1.6, 1], gap="large")
+        with h2:
+            secenek = ["Tüm ürünler"] + [s["kod"] for s in satirlar]
+            secim_h = st.selectbox("Ürün", secenek, key="yr_hiz_urun")
+            tasarim.hiz_siralamasi(satirlar)
+        with h1:
+            if secim_h == "Tüm ürünler":
+                birlesik = {}
+                eksik = 0
+                for s in satirlar:
+                    for h, n in s["seri"]:
+                        if n is None:
+                            eksik += 1
+                            continue
+                        birlesik[h] = birlesik.get(h, 0) + n
+                seri = sorted(birlesik.items())
+                _hiz_grafigi(seri, renk["ana"], f"{platform} · tüm ürünler")
+                kesik = [s["kod"] for s in satirlar if s["kapsam"]]
+                if kesik:
+                    st.caption("Not: " + ", ".join(kesik) + " çok yorum aldığı için en eski haftaları okunamadı; "
+                               "o haftalar toplamda eksik görünebilir.")
+            else:
+                s = next(x for x in satirlar if x["kod"] == secim_h)
+                _hiz_grafigi(s["seri"], renk["ana"], f"{platform} · {secim_h}")
+                if s["kapsam"]:
+                    st.caption(f"{secim_h} çok yorum aldığı için {s['kapsam']} öncesi okunmadı (gri değil, boş görünür).")
     st.markdown("<div style='height:18px'></div>", unsafe_allow_html=True)
 
     # ---- örnek yorumlar ----

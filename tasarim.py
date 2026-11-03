@@ -1105,7 +1105,9 @@ _YORUM_CSS = """<style>
 .yt-yildiz .bos { color:#D6DDD9; }
 .yt-yorum p { margin:0; font-size:14px; line-height:1.5; color:#15261D; }
 .yt-braun { font-size:10px; font-weight:800; background:#178A4E; color:#fff; padding:1px 6px; border-radius:5px; letter-spacing:.03em; }
-.yt-yigin { display:flex; width:130px; height:9px; border-radius:99px; overflow:hidden; background:#F1F4F2; margin:0 auto; cursor:help; }
+.yt-yigin { display:flex; width:110px; height:8px; border-radius:99px; overflow:hidden; background:#F1F4F2; margin:5px auto 0; cursor:help; }
+td.yt-tema-td { text-align:left !important; white-space:normal !important; max-width:190px; }
+td.yt-tema-td .yt-tema { white-space:normal; }
 .yt-yigin i { display:block; height:100%; }
 .st-key-pt_yorum_harita { background:#FFFFFF; border:1px solid #DCE9E1; border-radius:20px;
   box-shadow:0 6px 24px rgba(20,70,45,.06); padding:20px 22px 14px; }
@@ -1139,7 +1141,7 @@ def _puan_rozet(p, alt: str = "") -> str:
     if p is None:
         return '<span class="yt-puan yok">–</span>'
     sinif = "iyi" if p >= 4.5 else ("orta" if p >= 4.0 else "kotu")
-    return (f'<span class="yt-puan {sinif}">★ {p:.2f}'.replace(".", ",") + "</span>"
+    return (f'<span class="yt-puan {sinif}" title="Tam değer: {p:.3f}">★ {p:.1f}'.replace(".", ",") + "</span>"
             + (f'<span class="yt-alt">{html.escape(alt)}</span>' if alt else ""))
 
 
@@ -1158,21 +1160,73 @@ def yorum_baslik(zaman: str = "") -> None:
                         unsafe_allow_html=True)
 
 
+PLATFORM_RENK = {
+    # Trendyol: turuncu + kömür; Hepsiburada: kendi turuncusu + lacivert (iki marka da turuncu, ayrım tonda ve logoda)
+    "Trendyol": {"ana": "#F27A1A", "koyu": "#B4530A", "acik": "#FFF4EA", "cizgi": "#F8CFA8", "ikincil": "#333333"},
+    "Hepsiburada": {"ana": "#FF6000", "koyu": "#C24600", "acik": "#FFF1E8", "cizgi": "#FFC9A3", "ikincil": "#2B2F42"},
+}
+
+
+def platform_temasi(platform: str) -> dict:
+    """Seçili platformun renklerini sayfaya uygular; renk sözlüğünü döndürür."""
+    r = PLATFORM_RENK.get(platform, PLATFORM_RENK["Trendyol"])
+    st.markdown(f"""<style>
+.st-key-yr_platform [data-testid="stButtonGroup"] > div:last-child {{ gap:6px; }}
+.st-key-yr_platform button {{ height:46px; padding:0 26px !important; border-radius:999px !important;
+  border:1.5px solid #DCE3DF !important; background:#fff !important; }}
+.st-key-yr_platform button p {{ font-size:15.5px; font-weight:700; color:#3E4A44 !important; }}
+.st-key-yr_platform button[aria-checked="true"], .st-key-yr_platform button[kind="segmented_controlActive"] {{
+  background:{r["ana"]} !important; border-color:{r["ana"]} !important; box-shadow:0 4px 14px {r["cizgi"]} !important; }}
+.st-key-yr_platform button[aria-checked="true"] p, .st-key-yr_platform button[kind="segmented_controlActive"] p {{ color:#fff !important; }}
+.yt-pf-bant {{ display:flex; align-items:center; gap:16px; padding:14px 20px; margin:10px 0 4px; border-radius:16px;
+  background:linear-gradient(90deg,{r["acik"]},#FFFFFF 70%); border:1px solid {r["cizgi"]}; border-left:6px solid {r["ana"]}; }}
+.yt-pf-bant .logo img, .yt-pf-bant .logo svg {{ height:26px; max-width:150px; object-fit:contain; }}
+.yt-pf-bant b {{ font-size:18px; color:{r["ikincil"]}; }} .yt-pf-bant span {{ font-size:13px; color:#52675A; }}
+.pt-kpi.pf .val b {{ color:{r["koyu"]}; }}
+.pt-kpi.pf {{ border-top:3px solid {r["ana"]}; }}
+table.pt-tablo.yt-pf thead th {{ border-bottom:2px solid {r["ana"]} !important; }}
+a.yt-urun-link {{ color:{r["ikincil"]} !important; text-decoration:none !important; border-bottom:1.5px solid {r["cizgi"]}; }}
+a.yt-urun-link:hover {{ color:{r["ana"]} !important; border-bottom-color:{r["ana"]}; }}
+a.yt-urun-link::after {{ content:" ↗"; font-size:10px; color:{r["ana"]}; }}
+.yt-ilan {{ display:inline-block; font-size:9.5px; font-weight:800; color:{r["koyu"]}; background:{r["acik"]};
+  border:1px solid {r["cizgi"]}; padding:0 5px; border-radius:5px; margin-left:4px; cursor:help; vertical-align:middle; }}
+.yt-spark {{ display:inline-flex; align-items:flex-end; gap:2px; height:22px; vertical-align:middle; margin-right:6px; }}
+.yt-spark i {{ display:block; width:5px; border-radius:2px 2px 0 0; background:{r["ana"]}; opacity:.85; }}
+.yt-spark i.son {{ background:#D8DEDA; }} .yt-spark i.yok {{ background:transparent; border-bottom:1px dashed #C9D3CD; }}
+.yt-hiz-sira div {{ display:grid; grid-template-columns:minmax(0,1fr) 120px 54px; gap:8px; align-items:center; font-size:12.5px; padding:3px 0; }}
+.yt-hiz-sira .iz {{ height:8px; border-radius:99px; background:#F1F4F2; overflow:hidden; }}
+.yt-hiz-sira .iz i {{ display:block; height:100%; background:{r["ana"]}; }}
+.yt-hiz-sira b {{ text-align:right; font-variant-numeric:tabular-nums; }}
+.st-key-pt_yorum_hiz {{ background:#FFFFFF; border:1px solid #DCE9E1; border-radius:20px;
+  box-shadow:0 6px 24px rgba(20,70,45,.06); padding:20px 22px 14px; }}
+</style>""", unsafe_allow_html=True)
+    return r
+
+
+def yorum_platform_bandi(platform: str, urun_sayisi: int) -> None:
+    logo = KANAL_LOGOLARI.get(platform, "")
+    st.markdown(f'<div class="yt-pf-bant"><span class="logo">{logo}</span><b>{html.escape(platform)}</b>'
+                f'<span>{urun_sayisi} ürün · puanlar ve sayılar {html.escape(platform)} sitesindekiyle aynı</span></div>',
+                unsafe_allow_html=True)
+
+
 def yorum_kpi(k: dict) -> None:
     ort = k.get("ortalama")
     ort_m = f"{ort:.2f}".replace(".", ",") if ort is not None else "–"
     sik = k.get("sikayet_orani")
     sik_m = f"%{sik:.0f}" if sik is not None else "–"
+    hiz = k.get("hiz")
+    hiz_m = f"{hiz:.0f}" if hiz is not None else "–"
     st.markdown(_YORUM_CSS + f"""<div class="pt-kpis">
-<div class="pt-card pt-kpi"><span class="lbl">Toplam değerlendirme</span>
+<div class="pt-card pt-kpi pf"><span class="lbl">Toplam değerlendirme</span>
   <div class="val"><b class="num">{_sayi_metni(k.get("toplam"))}</b><span>puan</span></div>
-  <span class="sub">{html.escape(k.get("toplam_alt", ""))} · tüm satıcılar</span></div>
-<div class="pt-card pt-kpi"><span class="lbl">Ortalama puan</span>
+  <span class="sub">{html.escape(k.get("toplam_alt", ""))}</span></div>
+<div class="pt-card pt-kpi pf"><span class="lbl">Ortalama puan</span>
   <div class="val"><b class="num">{ort_m}</b><span>/ 5</span></div>
   <span class="sub">{html.escape(k.get("ortalama_alt", ""))}</span></div>
-<div class="pt-card pt-kpi"><span class="lbl">Analiz edilen yorum</span>
-  <div class="val"><b class="num">{_sayi_metni(k.get("okunan"))}</b><span>yorum</span></div>
-  <span class="sub">{html.escape(k.get("okunan_alt", ""))}</span></div>
+<div class="pt-card pt-kpi pf"><span class="lbl">Haftada gelen yorum</span>
+  <div class="val"><b class="num">{hiz_m}</b><span>yorum / hafta</span></div>
+  <span class="sub">{html.escape(k.get("hiz_alt", ""))} · tüm ürünler</span></div>
 <div class="pt-card pt-kpi{' bad' if sik is not None and sik >= 15 else ''}"><span class="lbl">Şikayet içeren yorum</span>
   <div class="val"><b class="num">{sik_m}</b><span>{html.escape(k.get("sikayet_alt", ""))}</span></div>
   <span class="sub">En az bir şikayet teması geçen yorumlar</span></div>
@@ -1233,18 +1287,44 @@ def _platform_hucre(p: dict | None) -> str:
     return h
 
 
-def yorum_urun_tablosu(satirlar: list[dict]) -> None:
-    """satirlar: kod, tam_ad, grup, gorsel, ty, hb (platform özetleri), okunan, son_ort, dagilim, sikayet_orani,
-    sikayetler [(tema, adet)], memnuniyetler [(tema, adet)]"""
+def _urun_link(r: dict) -> str:
+    """Ürün kodu: tıklayınca ürünün platformdaki sayfası yeni sekmede açılır."""
+    kod = html.escape(str(r.get("kod") or "-"))
+    ad = html.escape(" ".join(str(r.get("tam_ad") or "").split()), quote=True)
+    link = str(r.get("link") or "")
+    ic = (f'<a class="yt-urun-link" href="{html.escape(link, quote=True)}" target="_blank" rel="noopener" '
+          f'title="{ad} · sitede aç">{kod}</a>' if link.startswith("http") else f'<span title="{ad}">{kod}</span>')
+    ilanlar = r.get("ilanlar") or []
+    if len(ilanlar) > 1:
+        ipucu = " | ".join(f"İlan {i + 1}: {_sayi_metni(x.get('toplam'))} değerlendirme, "
+                           f"{(x.get('ortalama') or 0):.1f} puan".replace(".", ",") for i, x in enumerate(ilanlar))
+        ic += f'<span class="yt-ilan" title="{html.escape(ipucu, quote=True)}">{len(ilanlar)} İLAN</span>'
+    return f'<span class="pt-kod">{ic}</span>'
+
+
+def _spark_html(seri) -> str:
+    vals = [n for _, n in seri if n is not None]
+    en = max(vals) if vals else 0
+    parca = ""
+    for i, (h, n) in enumerate(seri):
+        if n is None:
+            parca += '<i class="yok" style="height:2px"></i>'
+            continue
+        boy = 2 + (n / en * 20 if en else 0)
+        parca += f'<i class="{"son" if i == len(seri) - 1 else ""}" style="height:{boy:.0f}px" title="{h}: {n}"></i>'
+    return f'<span class="yt-spark">{parca}</span>'
+
+
+def yorum_urun_tablosu(satirlar: list[dict], platform: str = "") -> None:
     with st.container(key="pt_yorum_tablo"):
-        st.markdown('<div class="yt-head"><span class="ttl">Ürün bazlı yorum özeti</span><span>Platform puanı ürünün tamamı; '
-                    'diğer sütunlar okunan son yorumlardan</span></div>', unsafe_allow_html=True)
-        logo = lambda ad: (f'<div class="logo">{KANAL_LOGOLARI[ad]}</div>' if KANAL_LOGOLARI.get(ad) else f"<b>{ad}</b>")
-        bas = ("<th>Ürün Kodu</th><th>Alt Grup</th>"
-               f'<th class="ch">{logo("Trendyol")}<small>puan · değerlendirme</small></th>'
-               f'<th class="ch">{logo("Hepsiburada")}<small>puan · değerlendirme</small></th>'
-               "<th>Son yorumlar<small>ortalama · okunan</small></th><th>Yıldız dağılımı<small>5★ → 1★ · üzerine gel</small></th>"
-               "<th>Şikayet oranı</th><th>En sık şikayet</th><th>En çok beğenilen</th>")
+        st.markdown(f'<div class="yt-head"><span class="ttl">Ürün bazlı yorum özeti · {html.escape(platform)}</span>'
+                    '<span>Puan ve sayılar ürünün tamamı; sağdaki sütunlar okunan son yorumlardan · '
+                    'ürün koduna tıklayınca sitede açılır</span></div>', unsafe_allow_html=True)
+        yorum_bas = "<th>Yazılı yorum</th>" if platform == "Trendyol" else ""
+        bas = ("<th>Ürün Kodu</th><th>Alt Grup</th><th>Puan</th><th>Değerlendirme</th>" + yorum_bas +
+               "<th>Haftalık yorum<small>son 12 hafta</small></th><th>Son yorumlar<small>ortalama · 5★→1★ dağılım</small></th>"
+               "<th>Şikayet oranı</th>"
+               "<th>En sık şikayet</th><th>En çok beğenilen</th>")
         govde = ""
         for r in satirlar:
             so = r.get("sikayet_orani")
@@ -1254,19 +1334,46 @@ def yorum_urun_tablosu(satirlar: list[dict]) -> None:
                 or '<span class="pt-yok">–</span>'
             mem = "".join(f'<span class="yt-tema iyi">{html.escape(t)} · {n}</span>' for t, n in r.get("memnuniyetler", [])[:2]) \
                 or '<span class="pt-yok">–</span>'
+            durum = str(r.get("durum") or "")
+            uyari = ""
+            if durum and durum != "Tamam":
+                kisa = ("eski veri" if durum.startswith(("Eski", "Yorumlar eski"))
+                        else ("okunamadı" if durum.startswith("Okunamad") else "kısmi"))
+                uyari = f'<span class="yt-alt uyari" title="{html.escape(durum, quote=True)}">⚠ {kisa}</span>'
+            hiz = r.get("haftalik")
+            hiz_m = (f'{_spark_html(r.get("seri") or [])}<b class="num">{hiz:.1f}</b>'.replace(".", ",")
+                     if hiz is not None else '<span class="pt-yok">–</span>')
+            yorum_td = (f'<td><span class="num">{_sayi_metni(r.get("yorumlu"))}</span></td>'
+                        if platform == "Trendyol" else "")
             govde += ("<tr>"
-                      f"<td>{_kod_html(r)}</td>"
+                      f"<td>{_urun_link(r)}</td>"
                       f'<td><span class="pt-grp">{html.escape(str(r.get("grup") or ""))}</span></td>'
-                      f"<td>{_platform_hucre(r.get('ty'))}</td><td>{_platform_hucre(r.get('hb'))}</td>"
-                      f"<td>{_puan_rozet(r.get('son_ort'), str(r.get('okunan') or 0) + ' yorum')}</td>"
-                      f"<td>{_dagilim_html(r.get('dagilim') or {}) or '<span class=pt-yok>–</span>'}</td>"
-                      f"<td>{so_m}</td><td style='text-align:left !important'>{sik}</td>"
-                      f"<td style='text-align:left !important'>{mem}</td></tr>")
-        st.markdown(f'<table class="pt-tablo" lang="tr"><thead><tr>{bas}</tr></thead><tbody>{govde}</tbody></table>'
-                    '<div class="pt-foot-note"><span>Puan rengi: yeşil 4,5+ · sarı 4,0–4,5 · kırmızı 4,0 altı</span>'
-                    '<span>Şikayet oranı: okunan yorumlarda en az bir şikayet teması geçenlerin payı</span>'
-                    '<span>⚠ işaretinin üzerine gelince tarama notu görünür</span></div>',
+                      f"<td>{_puan_rozet(r.get('puan'))}{uyari}</td>"
+                      f'<td><b class="num">{_sayi_metni(r.get("toplam"))}</b></td>' + yorum_td +
+                      f"<td style='white-space:nowrap'>{hiz_m}</td>"
+                      f"<td>{_puan_rozet(r.get('son_ort'))}{_dagilim_html(r.get('dagilim') or {}).replace('1-2★:', str(r.get('okunan') or 0) + ' yorum · 1-2★:')}</td>"
+                      f"<td>{so_m}</td><td class='yt-tema-td'>{sik}</td>"
+                      f"<td class='yt-tema-td'>{mem}</td></tr>")
+        st.markdown(f'<table class="pt-tablo yt-pf" lang="tr"><thead><tr>{bas}</tr></thead><tbody>{govde}</tbody></table>'
+                    '<div class="pt-foot-note"><span>Puan: sitede görünen değer (tam değer için üzerine gelin) · '
+                    'yeşil 4,5+ · sarı 4,0–4,5 · kırmızı 4,0 altı</span>'
+                    '<span>"2 İLAN": ürünün birden fazla ilanı var, sayılar toplamdır (üzerine gelince ilan ilan görünür)</span>'
+                    '<span>Haftalık yorum: tamamlanan haftaların ortalaması; gri çubuk içinde bulunulan hafta</span></div>',
                     unsafe_allow_html=True)
+
+
+def hiz_siralamasi(satirlar: list[dict], adet: int = 8) -> None:
+    sirali = sorted([s for s in satirlar if s.get("haftalik") is not None], key=lambda s: -s["haftalik"])[:adet]
+    if not sirali:
+        return
+    en = sirali[0]["haftalik"] or 1
+    govde = ""
+    for s in sirali:
+        deger = f"{s['haftalik']:.1f}".replace(".", ",")
+        govde += (f'<div><span>{_urun_link(s)}</span><span class="iz"><i style="width:{s["haftalik"] / en * 100:.0f}%"></i></span>'
+                  f'<b>{deger}</b></div>')
+    st.markdown(f'<div class="yt-alt" style="margin:4px 0 6px">En çok yorum alan ürünler · haftalık ortalama</div>'
+                f'<div class="yt-hiz-sira">{govde}</div>', unsafe_allow_html=True)
 
 
 def _yildiz(p) -> str:
@@ -1286,7 +1393,7 @@ def ornek_yorum_listesi(yorumlar: list[dict], vurgu: str = "") -> None:
         braun = '<span class="yt-braun">BRAUN SHOP</span>' if y.get("braun") else ""
         temalar = "".join(f'<span class="yt-tema kotu">{html.escape(t)}</span>' for t in y.get("sikayet", [])) + \
             "".join(f'<span class="yt-tema iyi">{html.escape(t)}</span>' for t in y.get("memnuniyet", []))
-        govde += (f'<div class="yt-yorum"><div class="ust">{_yildiz(y.get("puan"))}<b>{html.escape(y.get("kod", ""))}</b>'
+        govde += (f'<div class="yt-yorum"><div class="ust">{_yildiz(y.get("puan"))}<b>{_urun_link(y)}</b>'
                   f'<span>{html.escape(y.get("platform", ""))}</span>'
                   + (braun if y.get("braun") else f'<span>· {html.escape(y.get("satici", "") or "satıcı bilinmiyor")}</span>') +
                   f'<span>· {html.escape(y.get("tarih_metni", ""))}</span>{temalar}</div>'
@@ -1359,7 +1466,7 @@ def tema_isi_haritasi(satirlar: list[dict], temalar: list[dict], min_yorum: int 
         for r in sirali:
             n = r.get("okunan") or 0
             ad = html.escape(" ".join(str(r.get("tam_ad") or "").split()), quote=True)
-            govde += (f'<tr><td class="urun" title="{ad}"><b>{html.escape(str(r.get("kod") or ""))}</b>'
+            govde += (f'<tr><td class="urun" title="{ad}"><b>{_urun_link(r)}</b>'
                       f'<small>{html.escape(str(r.get("grup") or ""))} · {n} yorum</small></td>')
             onceki = None
             for t in kolonlar:
