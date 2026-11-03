@@ -921,16 +921,6 @@ def yorum_sayfasi():
     tasarim.tema_panelleri(_tema_listesi(_tema_sayimi(kayitlar, "sikayet")),
                            _tema_listesi(_tema_sayimi(kayitlar, "memnuniyet")), len(kayitlar))
     st.markdown("<div style='height:18px'></div>", unsafe_allow_html=True)
-    tum_temalar = []
-    for alan in ("sikayet", "memnuniyet"):
-        for t in _tema_listesi(_tema_sayimi(kayitlar, alan)):
-            if t["tema"] not in [y["tema"] for y in tum_temalar]:
-                tum_temalar.append({"tema": t["tema"], "grup": t["grup"]})
-    sira = {"Ürün": 0, "Satıcı & Kargo": 1}
-    sik_say = _tema_sayimi(kayitlar, "sikayet")
-    tum_temalar.sort(key=lambda t: (sira.get(t["grup"], 2), -sik_say.get(t["tema"], 0)))
-    tasarim.tema_isi_haritasi(satirlar, tum_temalar)
-    st.markdown("<div style='height:18px'></div>", unsafe_allow_html=True)
 
     # ---- ürün tablosu ----
     satirlar.sort(key=lambda s: -(s["toplam"] or 0))
@@ -941,6 +931,16 @@ def yorum_sayfasi():
                            f"Yorum_Analizi_{platform}_{zaman_ek}.xlsx",
                            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", key="yr_excel")
     tasarim.yorum_urun_tablosu(satirlar, platform)
+    st.markdown("<div style='height:18px'></div>", unsafe_allow_html=True)
+    tum_temalar = []
+    for alan in ("sikayet", "memnuniyet"):
+        for t in _tema_listesi(_tema_sayimi(kayitlar, alan)):
+            if t["tema"] not in [y["tema"] for y in tum_temalar]:
+                tum_temalar.append({"tema": t["tema"], "grup": t["grup"]})
+    sira = {"Ürün": 0, "Satıcı & Kargo": 1}
+    sik_say = _tema_sayimi(kayitlar, "sikayet")
+    tum_temalar.sort(key=lambda t: (sira.get(t["grup"], 2), -sik_say.get(t["tema"], 0)))
+    tasarim.tema_isi_haritasi(satirlar, tum_temalar)
     st.markdown("<div style='height:18px'></div>", unsafe_allow_html=True)
 
     # ---- yorum hızı ----

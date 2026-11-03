@@ -1135,8 +1135,12 @@ table.yt-harita td.h small { display:block; font-size:9.5px; font-weight:600; op
 table.yt-harita td.bos { background:#F6F8F7; color:#C3CDC7; font-weight:600; }
 table.yt-harita td.az { opacity:.5; outline:1.5px dashed #B9C4BE; outline-offset:-3px; }
 table.yt-harita td.h small { white-space:nowrap; }
-.yt-nasil { display:flex; gap:14px; align-items:center; background:#F7FAF8; border:1px solid #E1EAE4; border-radius:14px;
-  padding:10px 14px; margin:0 0 12px; font-size:13px; line-height:1.5; color:#3E4A44; }
+.yt-nasil { display:flex; gap:16px; align-items:center; background:#F7FAF8; border:1px solid #E1EAE4; border-radius:14px;
+  padding:12px 16px; margin:0 0 12px; font-size:13px; line-height:1.6; color:#52675A; max-width:620px; }
+.yt-nasil .ac { display:flex; flex-direction:column; }
+.yt-nasil .bs { font-weight:800; color:#15261D; font-size:13.5px; margin-bottom:2px; }
+.yt-nasil .ac b { display:inline-block; min-width:52px; color:#15261D; }
+.yt-nasil .kc { font-size:11.5px; color:#8A9A90; margin-top:2px; }
 .yt-nasil b { color:#15261D; }
 .yt-ornek-hucre { flex:none; display:inline-flex; flex-direction:column; align-items:center; justify-content:center;
   width:92px; height:42px; border-radius:8px; font-weight:800; font-size:14px; }
@@ -1215,6 +1219,17 @@ def platform_temasi(platform: str) -> dict:
 .yt-gst .bant3 i {{ display:block; height:100%; }}
 .yt-gst .leg {{ display:flex; gap:10px; font-size:11.5px; color:#52675A; flex-wrap:wrap; }}
 .yt-gst .leg span::before {{ content:""; display:inline-block; width:8px; height:8px; border-radius:2px; margin-right:4px; background:var(--c); }}
+.yt-gst .psl {{ display:flex; flex-direction:column; gap:5px; margin-top:4px; }}
+.yt-gst .ps {{ display:grid; grid-template-columns:10px 1fr auto auto; gap:8px; align-items:center; font-size:13.5px; color:#3E4A44; }}
+.yt-gst .ps .nokta {{ width:10px; height:10px; border-radius:3px; }}
+.yt-gst .ps b {{ font-size:18px; font-weight:800; color:#10281B; text-align:right; font-variant-numeric:tabular-nums; }}
+.yt-gst .ps .br {{ font-size:12px; color:#6A7E72; }}
+.yt-gst .kv {{ display:grid; grid-template-columns:auto 1fr; column-gap:10px; row-gap:5px; margin-top:4px; font-size:13px; }}
+.yt-gst .kv span {{ color:#6A7E72; }}
+.yt-gst .kv b {{ text-align:right; color:#15261D; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }}
+.yt-gst .kv b small {{ color:#8A9A90; font-weight:600; font-size:11.5px; }}
+.yt-gst .alt.dip {{ border-top:1px dashed #E1EAE4; padding-top:7px; margin-top:4px; }}
+.yt-gst .bant3 {{ height:10px !important; margin:4px 0 2px !important; }}
 .yt-gst .kart.kotu {{ border-top-color:#D2402F; }} .yt-gst .kart.iyi {{ border-top-color:#1F9D57; }}
 .yt-gst .ok {{ font-weight:800; }} .yt-gst .ok.up {{ color:#178A4E; }} .yt-gst .ok.down {{ color:#C4311F; }}
 .pt-kpi.pf .val b {{ color:{r["koyu"]}; }}
@@ -1252,6 +1267,10 @@ def _virgul(x, basamak: int = 1) -> str:
     return f"{x:.{basamak}f}".replace(".", ",")
 
 
+def _kv(satirlar) -> str:
+    return '<div class="kv">' + "".join(f'<span>{a}</span><b>{b}</b>' for a, b in satirlar) + '</div>'
+
+
 def yorum_gostergeleri(g: dict) -> None:
     """Tek bakışta okunan 4 gösterge: puan durumu, öne çıkan sorun, dikkat gereken ürün, son 30 gün."""
     kartlar = []
@@ -1261,21 +1280,22 @@ def yorum_gostergeleri(g: dict) -> None:
     bant = "".join(f'<i style="width:{p.get(k, 0) / top * 100:.1f}%;background:{c}"></i>'
                    for k, c in (("iyi", "#1F9D57"), ("orta", "#F0C54A"), ("kotu", "#D2402F")) if p.get(k))
     dusuk = p.get("en_dusuk")
+    satir = "".join(
+        f'<div class="ps"><span class="nokta" style="background:{c}"></span><span class="et">{et}</span>'
+        f'<b>{p.get(k, 0)}</b><span class="br">ürün</span></div>'
+        for k, c, et in (("iyi", "#1F9D57", "4,5 ve üzeri"), ("orta", "#E3B32C", "4,0 – 4,5"), ("kotu", "#D2402F", "4,0 altı")))
     kartlar.append(
-        f'<div class="kart{" kotu" if p.get("kotu") else ""}"><span class="lbl">Puan durumu</span>'
-        f'<span class="ana">{p.get("iyi", 0)} ürün 4,5+ · {p.get("kotu", 0)} ürün 4,0 altı</span>'
-        f'<span class="bant3">{bant}</span>'
-        f'<span class="leg"><span style="--c:#1F9D57">4,5+ : {p.get("iyi", 0)}</span><span style="--c:#F0C54A">4,0–4,5 : {p.get("orta", 0)}</span>'
-        f'<span style="--c:#D2402F">4,0 altı : {p.get("kotu", 0)}</span></span>'
-        + (f'<span class="alt">En düşük puan: <b>{dusuk[0]}</b> ★ {_virgul(dusuk[1])}</span>' if dusuk else "")
+        f'<div class="kart{" kotu" if p.get("kotu") else ""}"><span class="lbl">Puan durumu · {top} ürün</span>'
+        f'<span class="bant3">{bant}</span><div class="psl">{satir}</div>'
+        + (f'<span class="alt dip">En düşük: <b>{dusuk[0]}</b> ★ {_virgul(dusuk[1])}</span>' if dusuk else "")
         + '</div>')
     # 2) öne çıkan sorun
     s_ = g.get("sorun")
     if s_:
         kartlar.append(
             f'<div class="kart kotu"><span class="lbl">En sık şikayet</span><span class="ana">{html.escape(s_["tema"])}</span>'
-            f'<span class="alt"><b>{s_["adet"]}</b> yorumda geçiyor (okunanların %{s_["oran"]:.0f}). '
-            f'En çok: <b>{s_["urun"]}</b> ({s_["urun_adet"]} yorum)</span></div>')
+            + _kv([("Geçtiği yorum", f'{s_["adet"]} &nbsp;<small>(%{s_["oran"]:.0f})</small>'),
+                   ("En çok görülen", f'{s_["urun"]} &nbsp;<small>({s_["urun_adet"]})</small>')]) + '</div>')
     else:
         kartlar.append('<div class="kart iyi"><span class="lbl">En sık şikayet</span><span class="ana">Şikayet yok</span></div>')
     # 3) dikkat gereken ürün
@@ -1283,9 +1303,9 @@ def yorum_gostergeleri(g: dict) -> None:
     if d:
         kartlar.append(
             f'<div class="kart kotu"><span class="lbl">Dikkat gereken ürün</span><span class="ana">{d["link"]}</span>'
-            f'<span class="alt">Şikayet oranı <b>%{d["oran"]:.0f}</b> ({d["sik"]} / {d["n"]} yorum)'
-            + (f' · ★ {_virgul(d["puan"])}' if d.get("puan") else "")
-            + (f' · en çok: <b>{html.escape(d["tema"])}</b>' if d.get("tema") else "") + '</span></div>')
+            + _kv([("Şikayet oranı", f'%{d["oran"]:.0f} &nbsp;<small>({d["sik"]} / {d["n"]})</small>'),
+                   ("Puan", f'★ {_virgul(d["puan"])}' if d.get("puan") else "–"),
+                   ("En çok şikayet", html.escape(d["tema"]) if d.get("tema") else "–")]) + '</div>')
     else:
         kartlar.append('<div class="kart"><span class="lbl">Dikkat gereken ürün</span><span class="ana">–</span>'
                        '<span class="alt">10+ yorumu olan ürün yok</span></div>')
@@ -1301,8 +1321,10 @@ def yorum_gostergeleri(g: dict) -> None:
         kartlar.append(
             f'<div class="kart{sinif}"><span class="lbl">Son 30 gün</span>'
             f'<span class="ana">★ {_virgul(t["son_puan"])} {ok}</span>'
-            f'<span class="alt"><b>{t["son_n"]}</b> yeni yorum · şikayet <b>%{t["son_sik"]:.0f}</b>{sik_fark}'
-            + (f'<br>Önceki 90 günün ortalaması: ★ {_virgul(t["once_puan"])}' if t.get("once_puan") else "") + '</span></div>')
+            + _kv([("Yeni yorum", str(t["son_n"])),
+                   ("Şikayet oranı", f'%{t["son_sik"]:.0f}' + (f' &nbsp;<small>(önce %{t["once_sik"]:.0f})</small>'
+                                                               if t.get("once_sik") is not None else "")),
+                   ("Önceki 90 gün", f'★ {_virgul(t["once_puan"])}' if t.get("once_puan") else "–")]) + '</div>')
     else:
         kartlar.append('<div class="kart"><span class="lbl">Son 30 gün</span><span class="ana">Yeni yorum yok</span></div>')
     st.markdown(_YORUM_CSS + '<div class="yt-gst">' + "".join(kartlar) + '</div>', unsafe_allow_html=True)
@@ -1635,11 +1657,14 @@ def tema_isi_haritasi(satirlar: list[dict], temalar: list[dict], min_yorum: int 
         if ornek:
             kod, tema, adet, n = ornek
             bg, yazi = _harita_rengi(adet / n * 100, ust, mod)
+            oran_m = f"%{adet / n * 100:.0f}"
             nasil = (f'<div class="yt-nasil"><span class="yt-ornek-hucre" style="background:{bg};color:{yazi}">'
-                     f'%{adet / n * 100:.0f}<small>{adet} / {n} yorum</small></span>'
-                     f'<div><b>Nasıl okunur?</b> {html.escape(str(kod))} için okunan <b>{n} yorumun {adet} tanesinde</b> '
-                     f'müşteri <b>{html.escape(tema.lower())}</b> konusunda {tur} (oran: <b>%{adet / n * 100:.0f}</b>). '
-                     'Renk koyulaştıkça oran yükselir. Boş hücre: o konuda hiç yorum yok.</div></div>')
+                     f'{oran_m}<small>{adet} / {n} yorum</small></span>'
+                     f'<div class="ac"><div class="bs">Nasıl okunur?</div>'
+                     f'<div><b>{oran_m}</b> &nbsp;yorumların yüzde kaçında bu konu geçiyor</div>'
+                     f'<div><b>{adet} / {n}</b> &nbsp;{n} yorumun {adet} tanesinde</div>'
+                     f'<div class="kc">Örnek: {html.escape(str(kod))} · {html.escape(tema)} &nbsp;·&nbsp; koyu renk = yüksek oran, boş = hiç geçmiyor</div>'
+                     '</div></div>')
         else:
             nasil = ""
         st.markdown(
