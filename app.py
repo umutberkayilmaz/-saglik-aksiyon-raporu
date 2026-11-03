@@ -8,7 +8,19 @@ import base64
 from datetime import datetime, timedelta, timezone
 import gspread
 from google.oauth2.service_account import Credentials
+import importlib
 import tasarim
+
+# Streamlit Cloud, GitHub'dan yeni sürüm gelince app.py'yi yeniden çalıştırır ama daha önce yüklenmiş
+# tasarim.py'yi hafızada eski haliyle tutabilir. Dosya değiştiyse yeniden yükle (yoksa yeni fonksiyonlar
+# "beklenmeyen parametre" gibi hatalar verir).
+try:
+    _tasarim_surum = os.path.getmtime(tasarim.__file__), os.path.getsize(tasarim.__file__)
+    if getattr(tasarim, "_yuklenen_surum", None) != _tasarim_surum:
+        tasarim = importlib.reload(tasarim)
+        tasarim._yuklenen_surum = _tasarim_surum
+except Exception:
+    pass
 
 # ================= SAYFA AYARLARI =================
 st.set_page_config(page_title="Sağlık · Fiyat & Buybox", page_icon=tasarim.favicon(), layout="wide")
