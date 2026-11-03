@@ -1106,18 +1106,23 @@ _YORUM_CSS = """<style>
 .yt-yorum p { margin:0; font-size:14px; line-height:1.5; color:#15261D; }
 .yt-braun { font-size:10px; font-weight:800; background:#178A4E; color:#fff; padding:1px 6px; border-radius:5px; letter-spacing:.03em; }
 .yt-yigin { display:flex; width:110px; height:8px; border-radius:99px; overflow:hidden; background:#F1F4F2; margin:5px auto 0; cursor:help; }
-td.yt-tema-td { text-align:left !important; white-space:normal !important; max-width:190px; }
-td.yt-tema-td .yt-tema { white-space:normal; }
+td.yt-tema-td { text-align:left !important; }
+td.yt-tema-td .yt-tema { display:table; white-space:nowrap; margin:2px 0; }
 .yt-yigin i { display:block; height:100%; }
 .st-key-pt_yorum_harita { background:#FFFFFF; border:1px solid #DCE9E1; border-radius:20px;
   box-shadow:0 6px 24px rgba(20,70,45,.06); padding:20px 22px 14px; }
-.yt-harita-kutu { overflow-x:auto; }
+.yt-harita-kutu { }
 table.yt-harita { border-collapse:separate !important; border-spacing:3px; width:100%; font-size:12px; color:#15261D;
   table-layout:fixed; margin:0 !important; }
 table.yt-harita tr, table.yt-harita th, table.yt-harita td { border:0 !important; background-clip:padding-box; }
-table.yt-harita th { background:transparent !important; }
-table.yt-harita th { font-size:10.5px; font-weight:700; color:#52675A; text-align:center; vertical-align:bottom;
-  padding:4px 2px 6px; line-height:1.25; min-width:62px; }
+table.yt-harita th { background:#FFFFFF !important; }
+/* başlık donuk: aşağı inince tema adları üstte kalır (60px = Streamlit üst çubuğu) */
+table.yt-harita thead tr:first-child th { position:sticky; top:60px; z-index:5; height:24px;
+  box-shadow:0 3px 0 0 #FFFFFF, 3px 0 0 0 #FFFFFF, 3px 3px 0 0 #FFFFFF, 0 -3px 0 0 #FFFFFF; }
+table.yt-harita thead tr:nth-child(2) th { position:sticky; top:87px; z-index:5;
+  box-shadow:3px 0 0 0 #FFFFFF, 0 -3px 0 0 #FFFFFF, 3px -3px 0 0 #FFFFFF, 0 9px 9px -9px rgba(20,70,45,.35); }
+table.yt-harita th { font-size:10.5px; font-weight:700; color:#52675A; text-align:center !important; vertical-align:bottom;
+  padding:4px 2px 7px !important; line-height:1.3; white-space:nowrap; word-break:keep-all; hyphens:none; }
 table.yt-harita th.grp { font-size:9.5px; letter-spacing:.07em; text-transform:uppercase; color:#8A9A90; padding:0 2px 2px;
   border-bottom:1px dashed #E1EAE4; }
 table.yt-harita th.urun, table.yt-harita td.urun { text-align:left !important; width:160px; white-space:nowrap;
@@ -1347,7 +1352,7 @@ def yorum_urun_tablosu(satirlar: list[dict], platform: str = "") -> None:
                         if platform == "Trendyol" else "")
             govde += ("<tr>"
                       f"<td>{_urun_link(r)}</td>"
-                      f'<td><span class="pt-grp">{html.escape(str(r.get("grup") or ""))}</span></td>'
+                      f'<td><span class="pt-grp">{html.escape(_grup_metni(r.get("grup")))}</span></td>'
                       f"<td>{_puan_rozet(r.get('puan'))}{uyari}</td>"
                       f'<td><b class="num">{_sayi_metni(r.get("toplam"))}</b></td>' + yorum_td +
                       f"<td style='white-space:nowrap'>{hiz_m}</td>"
@@ -1399,6 +1404,26 @@ def ornek_yorum_listesi(yorumlar: list[dict], vurgu: str = "") -> None:
                   f'<span>· {html.escape(y.get("tarih_metni", ""))}</span>{temalar}</div>'
                   f'<p>{html.escape(y.get("metin", ""))}</p></div>')
     st.markdown(govde, unsafe_allow_html=True)
+
+
+def _grup_metni(g) -> str:
+    """'ATEŞ ÖLÇER' -> 'Ateş Ölçer' (mapping'de bazı gruplar büyük harfle yazılmış; görünüm tutarlı olsun)."""
+    g = " ".join(str(g or "").split())
+    if g and g == g.upper():
+        kucuk = g.replace("I", "ı").replace("İ", "i").lower()
+        g = " ".join((k[:1].replace("i", "İ").replace("ı", "I").upper() + k[1:]) for k in kucuk.split())
+    return g
+
+
+def _baslik_satirlari(ad: str) -> str:
+    """Tema adını kelime kelime alt alta yazar; '/' bir önceki kelimeyle kalır (kelime ortadan bölünmez)."""
+    kelimeler = []
+    for k in ad.split():
+        if k == "/" and kelimeler:
+            kelimeler[-1] += " /"
+        else:
+            kelimeler.append(k)
+    return "<br>".join(html.escape(k) for k in kelimeler)
 
 
 _HARITA_RENK = {"sikayet": ((253, 236, 233), (196, 49, 32)), "memnuniyet": ((232, 246, 237), (23, 128, 72))}
@@ -1458,7 +1483,7 @@ def tema_isi_haritasi(satirlar: list[dict], temalar: list[dict], min_yorum: int 
         for t in kolonlar:
             if onceki and t["grup"] != onceki:
                 bas += '<th class="ayrac"></th>'
-            bas += f'<th>{html.escape(t["tema"]).replace(" / ", " /<br>")}</th>'
+            bas += f'<th title="{html.escape(t["tema"], quote=True)}">{_baslik_satirlari(t["tema"])}</th>'
             onceki = t["grup"]
 
         sirali = sorted(satirlar, key=lambda r: -sum((r.get(alan) or {}).values()) / max(1, r.get("okunan") or 1))
@@ -1467,7 +1492,7 @@ def tema_isi_haritasi(satirlar: list[dict], temalar: list[dict], min_yorum: int 
             n = r.get("okunan") or 0
             ad = html.escape(" ".join(str(r.get("tam_ad") or "").split()), quote=True)
             govde += (f'<tr><td class="urun" title="{ad}"><b>{_urun_link(r)}</b>'
-                      f'<small>{html.escape(str(r.get("grup") or ""))} · {n} yorum</small></td>')
+                      f'<small>{html.escape(_grup_metni(r.get("grup")))} · {n} yorum</small></td>')
             onceki = None
             for t in kolonlar:
                 if onceki and t["grup"] != onceki:
