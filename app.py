@@ -866,7 +866,7 @@ def yorum_sayfasi():
     hizlar = [s["haftalik"] for s in satirlar if s["haftalik"] is not None]
     sikayetli = sum(1 for k in kayitlar if k["sikayet"])
     puanlar = [k["puan"] for k in kayitlar if k["puan"] is not None]
-    tasarim.yorum_platform_bandi(platform, len(satirlar))
+    tasarim.yorum_platform_bandi(platform, len(satirlar), braun=(satici == "Braun Shop"))
     tasarim.yorum_kpi({
         "toplam": toplam,
         "toplam_alt": (f"{int(sum(yorumlu)):,} yazılı yorum".replace(",", ".") if yorumlu
@@ -938,33 +938,48 @@ def yorum_sayfasi():
                     st.caption(f"{secim_h} çok yorum aldığı için {s['kapsam']} öncesi okunmadı (gri değil, boş görünür).")
     st.markdown("<div style='height:18px'></div>", unsafe_allow_html=True)
 
-    # ---- örnek yorumlar ----
+    # ---- yorumları oku: her ürün için 10 memnuniyet + 10 şikayet ----
+    def _ayir(liste):
+        """Memnuniyet: şikayet teması olmayan 4-5 yıldızlılar (temalı olanlar önce).
+        Şikayet: şikayet teması geçen ya da 1-2 yıldızlılar; yetmezse 3 yıldızlılar eklenir."""
+        yeni = sorted(liste, key=lambda k: k["tarih"], reverse=True)
+        sik = [k for k in yeni if k["sikayet"] or (k["puan"] is not None and k["puan"] <= 2)]
+        sik += [k for k in yeni if k not in sik and k["puan"] == 3]
+        mem = [k for k in yeni if not k["sikayet"] and (k["puan"] or 0) >= 4]
+        mem = [k for k in mem if k["memnuniyet"]] + [k for k in mem if not k["memnuniyet"]]
+        return mem, sik
+
     with st.container(key="pt_yorum_ornek"):
-        st.markdown('<div class="yt-head"><span class="ttl">Yorumları oku</span><span>Seçtiğin temaya göre en yeni yorumlar</span></div>',
-                    unsafe_allow_html=True)
-        sikayet_tema = [x["tema"] for x in _tema_listesi(_tema_sayimi(kayitlar, "sikayet"))]
-        memnun_tema = [x["tema"] for x in _tema_listesi(_tema_sayimi(kayitlar, "memnuniyet"))]
-        secenekler = (["Tüm yorumlar", "Düşük puanlılar (1-2 ★)"] + [f"Şikayet · {t}" for t in sikayet_tema]
-                      + [f"Memnuniyet · {t}" for t in memnun_tema])
-        d1, d2, d3 = st.columns([2.2, 1.6, 1])
+        kimden = "Braun Shop'tan alanların" if satici == "Braun Shop" else "Tüm satıcılardan alanların"
+        st.markdown(f'<div class="yt-head"><span class="ttl">Yorumları oku</span><span>{kimden} yorumları · '
+                    'her ürün için en yeni 10 memnuniyet + 10 şikayet</span></div>', unsafe_allow_html=True)
+        d1, d2 = st.columns([1.4, 2.6])
         with d1:
-            secim = st.selectbox("Tema", secenekler, index=2 if len(secenekler) > 2 else 0, key="yr_tema")
-        with d2:
             urun_sec = st.selectbox("Ürün", ["Tüm ürünler"] + [s["kod"] for s in satirlar], key="yr_urun")
-        with d3:
-            adet = st.selectbox("Göster", [10, 25, 50, 100], key="yr_adet")
-        liste = kayitlar
-        if urun_sec != "Tüm ürünler":
-            liste = [k for k in liste if k["kod"] == urun_sec]
-        if secim.startswith("Şikayet · "):
-            liste = [k for k in liste if secim[10:] in k["sikayet"]]
-        elif secim.startswith("Memnuniyet · "):
-            liste = [k for k in liste if secim[13:] in k["memnuniyet"]]
-        elif secim.startswith("Düşük"):
-            liste = [k for k in liste if k["puan"] is not None and k["puan"] <= 2]
-        liste = sorted(liste, key=lambda k: k["tarih"], reverse=True)
-        st.caption(f"{len(liste)} yorum")
-        tasarim.ornek_yorum_listesi(liste[:adet])
+        with d2:
+            temalar_s = ["Tüm konular"] + sorted({t for k in kayitlar for t in k["sikayet"] + k["memnuniyet"]})
+            tema_sec = st.selectbox("Konu", temalar_s, key="yr_tema",
+                                    help="Bir konu seçersen sadece o konunun geçtiği yorumlar listelenir")
+        liste = kayitlar if tema_sec == "Tüm konular" else [
+            k for k in kayitlar if tema_sec in k["sikayet"] or tema_sec in k["memnuniyet"]]
+        urunler = [s for s in satirlar if urun_sec in ("Tüm ürünler", s["kod"])]
+        gosterilen = 0
+        for s in urunler:
+            uk = [k for k in liste if k["kod"] == s["kod"]]
+            if not uk:
+                continue
+            mem, sik = _ayir(uk)
+            gosterilen += 1
+            baslik = (f"{s['kod']} · {len(uk)} yorum · 😊 {len(mem)} memnuniyet · ☹️ {len(sik)} şikayet"
+                      + (f" · ★ {s['puan']:.1f}".replace(".", ",") if s.get("puan") else ""))
+            if urun_sec == "Tüm ürünler":
+                with st.expander(baslik, expanded=False):
+                    tasarim.yorum_ciftli_liste(mem, sik, 10)
+            else:
+                st.markdown(f"**{baslik}**")
+                tasarim.yorum_ciftli_liste(mem, sik, 10)
+        if not gosterilen:
+            st.markdown('<div class="yt-bos">Bu seçimde yorum yok.</div>', unsafe_allow_html=True)
 
 
 # ================= SAYFA =================

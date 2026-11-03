@@ -1141,6 +1141,10 @@ table.yt-harita td.h small { white-space:nowrap; }
 .yt-ornek-hucre { flex:none; display:inline-flex; flex-direction:column; align-items:center; justify-content:center;
   width:92px; height:42px; border-radius:8px; font-weight:800; font-size:14px; }
 .yt-ornek-hucre small { font-size:10px; font-weight:600; opacity:.85; }
+.yt-liste-bas { display:flex; justify-content:space-between; align-items:baseline; padding:8px 12px; border-radius:10px;
+  margin:6px 0 2px; font-size:12px; }
+.yt-liste-bas b { font-size:14px; } .yt-liste-bas span { color:#52675A; }
+.yt-liste-bas.iyi { background:#E6F5EC; color:#14693A; } .yt-liste-bas.kotu { background:#FDE6E2; color:#A3261A; }
 .yt-az-ornek { display:inline-block; padding:0 6px; border-radius:5px; background:#F6D5CF; opacity:.6;
   outline:1.5px dashed #B9C4BE; outline-offset:-2px; font-weight:700; }
 table.yt-harita tr:hover td.urun b { text-decoration:underline; }
@@ -1217,10 +1221,13 @@ a.yt-urun-link::after {{ content:" ↗"; font-size:10px; color:{r["ana"]}; }}
     return r
 
 
-def yorum_platform_bandi(platform: str, urun_sayisi: int) -> None:
+def yorum_platform_bandi(platform: str, urun_sayisi: int, braun: bool = False) -> None:
     logo = KANAL_LOGOLARI.get(platform, "")
-    st.markdown(f'<div class="yt-pf-bant"><span class="logo">{logo}</span><b>{html.escape(platform)}</b>'
-                f'<span>{urun_sayisi} ürün · puanlar ve sayılar {html.escape(platform)} sitesindekiyle aynı</span></div>',
+    filtre = ('<span class="yt-braun" style="font-size:11px;padding:3px 8px">SADECE BRAUN SHOP\'TAN ALANLAR</span>'
+              '<span>Temalar, harita, şikayet oranı ve yorumlar yalnızca Braun Shop müşterilerinin yorumlarından; '
+              'puan ve değerlendirme sayısı ürünün tamamı</span>' if braun else
+              f'<span>{urun_sayisi} ürün · puanlar ve sayılar {html.escape(platform)} sitesindekiyle aynı · tüm satıcılar</span>')
+    st.markdown(f'<div class="yt-pf-bant"><span class="logo">{logo}</span><b>{html.escape(platform)}</b>{filtre}</div>',
                 unsafe_allow_html=True)
 
 
@@ -1415,6 +1422,18 @@ def ornek_yorum_listesi(yorumlar: list[dict], vurgu: str = "") -> None:
     st.markdown(govde, unsafe_allow_html=True)
 
 
+def yorum_ciftli_liste(memnun: list[dict], sikayet: list[dict], hedef: int = 10) -> None:
+    """Yan yana iki sütun: solda memnuniyet, sağda şikayet yorumları (her biri en fazla `hedef`)."""
+    a, b = st.columns(2, gap="large")
+    for kol, liste, baslik, sinif in ((a, memnun, "Memnuniyet", "iyi"), (b, sikayet, "Şikayet", "kotu")):
+        with kol:
+            sayi = (f"en yeni {hedef} / {len(liste)} yorum" if len(liste) > hedef
+                    else f"{len(liste)} yorum (bu kadar var)" if len(liste) < hedef else f"{hedef} yorum")
+            st.markdown(f'<div class="yt-liste-bas {sinif}"><b>{baslik}</b><span>{sayi}</span></div>',
+                        unsafe_allow_html=True)
+            ornek_yorum_listesi(liste[:hedef])
+
+
 def _grup_metni(g) -> str:
     """'ATEŞ ÖLÇER' -> 'Ateş Ölçer' (mapping'de bazı gruplar büyük harfle yazılmış; görünüm tutarlı olsun)."""
     g = " ".join(str(g or "").split())
@@ -1458,8 +1477,8 @@ def tema_isi_haritasi(satirlar: list[dict], temalar: list[dict], min_yorum: int 
                         '<span>Hangi ürün hangi konuda şikayet / övgü alıyor</span></div>',
                         unsafe_allow_html=True)
         with b:
-            secim = st.segmented_control("Harita", ["Şikayetler", "Memnuniyet"], default="Şikayetler",
-                                         key="yr_harita_mod", label_visibility="collapsed") or "Şikayetler"
+            secim = st.segmented_control("Harita", ["Memnuniyet", "Şikayetler"], default="Memnuniyet",
+                                         key="yr_harita_mod", label_visibility="collapsed") or "Memnuniyet"
         mod = "sikayet" if secim == "Şikayetler" else "memnuniyet"
         alan = "sikayet_say" if mod == "sikayet" else "memnun_say"
         if not satirlar or not temalar:
