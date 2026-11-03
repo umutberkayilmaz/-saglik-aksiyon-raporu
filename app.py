@@ -14,8 +14,14 @@ import tasarim
 st.set_page_config(page_title="Sağlık · Fiyat & Buybox", page_icon=tasarim.favicon(), layout="wide")
 
 GSHEET_NAME = "Saglik_Aksiyon_Guncel"
+# Sheet'in kimliği (adres çubuğunda /d/ ile /edit arasındaki uzun kod). Doluysa dosya adla aranmaz,
+# doğrudan bu kodla açılır; ad değişse bile bağlantı kopmaz. Streamlit secrets'a gsheet_id olarak da yazılabilir.
+GSHEET_ID = ""
 GSHEET_WORKSHEET = "Guncel"
 BUYBOX_WORKSHEET = "BuyBox"
+YORUM_OZET_WORKSHEET = "Yorum_Ozet"     # yorum_script.py'nin yazdigi sayfalar
+YORUM_WORKSHEET = "Yorumlar"
+YORUM_GECIKME_ESIGI_DK = 5 * 24 * 60     # yorum taramasi (Pazartesi + Persembe) bundan eskiyse uyari
 DURUM_WORKSHEET = "Durum"             # ana script'in yazdigi platform tarama durumlari
 GECIKME_ESIGI_DK = 120                # fiyat taramasi (saat basi) bundan eskiyse panel uyari gosterir
 BB_GECIKME_ESIGI_DK = 26 * 60         # BuyBox taramasi (gunde 1) bundan eskiyse BuyBox sekmesi uyari gosterir
@@ -112,6 +118,25 @@ def get_gspread_client():
         return None
 
 
+def _tablo_ac(client):
+    """Sheet'i önce kimliğiyle (varsa), yoksa adıyla açar."""
+    kimlik = GSHEET_ID
+    try:
+        kimlik = kimlik or str(st.secrets.get("gsheet_id", "") or "")
+    except Exception:
+        pass
+    if kimlik.strip():
+        return client.open_by_key(kimlik.strip())
+    return client.open(GSHEET_NAME)
+
+
+def _panel_hesabi():
+    try:
+        return str(st.secrets["gcp_service_account"].get("client_email", ""))
+    except Exception:
+        return ""
+
+
 def extract_url(formula_val):
     """='=HYPERLINK(\"url\"; fiyat)' formulunden url'i cikarir."""
     if isinstance(formula_val, str) and "HYPERLINK" in formula_val.upper():
@@ -144,7 +169,7 @@ def load_data():
         return None, ""
 
     try:
-        sh = client.open(GSHEET_NAME)
+        sh = _tablo_ac(client)
         ws = sh.worksheet(GSHEET_WORKSHEET)
 
         values = ws.get_all_values()
@@ -177,6 +202,14 @@ def load_data():
                 df[f"{col}_link"] = df_formula[col].apply(extract_url)
 
         return df, update_text
+    except gspread.SpreadsheetNotFound:
+        st.error(f"Panel, Google Sheets'te '{GSHEET_NAME}' dosyasını göremiyor. Panelin bağlandığı hesap: "
+                 f"{_panel_hesabi() or 'okunamadı'}. Dosya bu adresle Düzenleyen olarak paylaşılmış olmalı.")
+        return None, ""
+    except gspread.exceptions.APIError as e:
+        st.error(f"Google Sheets erişim hatası ({getattr(e, 'code', '')}). Panelin bağlandığı hesap: "
+                 f"{_panel_hesabi() or 'okunamadı'} — dosyanın bu adresle paylaşıldığını kontrol edin.")
+        return None, ""
     except Exception as e:
         st.error(f"Veri okunurken hata: {e}")
         return None, ""
@@ -250,7 +283,7 @@ def load_durum():
     if not client:
         return {}
     try:
-        ws = client.open(GSHEET_NAME).worksheet(DURUM_WORKSHEET)
+        ws = _tablo_ac(client).worksheet(DURUM_WORKSHEET)
         values = ws.get_all_values()
     except Exception:
         return {}
@@ -444,7 +477,7 @@ def load_buybox():
     if not client:
         return None, ""
     try:
-        ws = client.open(GSHEET_NAME).worksheet(BUYBOX_WORKSHEET)
+        ws = _tablo_ac(client).worksheet(BUYBOX_WORKSHEET)
     except gspread.WorksheetNotFound:
         return None, ""
     except Exception as e:
@@ -611,6 +644,228 @@ def buybox_sayfasi():
     tasarim.bb_govde(satirlar, ESIK_YUZDE, BUYUK_SAPMA_YUZDE, kampanya_etiketi=kampanya_etiketi())
 
 
+# ================= YORUM ANALİZİ =================
+@st.cache_data(ttl=600)
+def load_yorumlar():
+    """(ozet_df, yorum_df, zaman) — yorum_script.py'nin yazdığı iki sayfa."""
+    client = get_gspread_client()
+    if not client:
+        return None, None, ""
+    try:
+        sh = _tablo_ac(client)
+        # UNFORMATTED: sayilar Sheet'in dil ayarindan bagimsiz gelsin (4,33 / 4.33 karisikligi olmasin)
+        oz = sh.worksheet(YORUM_OZET_WORKSHEET).get_all_values(value_render_option="UNFORMATTED_VALUE")
+        yo = sh.worksheet(YORUM_WORKSHEET).get_all_values(value_render_option="UNFORMATTED_VALUE")
+        oz = [["" if v is None else str(v) for v in r] for r in oz]
+        yo = [["" if v is None else str(v) for v in r] for r in yo]
+    except gspread.WorksheetNotFound:
+        return None, None, ""
+    except Exception as e:
+        st.error(f"Yorum verisi okunurken hata: {e}")
+        return None, None, ""
+    if not oz or len(oz) < 2:
+        return None, None, ""
+    zaman = next((h for h in oz[0] if str(h).startswith("Son Güncelleme")), "")
+    bas = [h for h in oz[0] if h and not str(h).startswith("Son Güncelleme")]
+    ozet = pd.DataFrame([r[:len(bas)] for r in oz[1:]], columns=bas)
+    yorum = pd.DataFrame(yo[1:], columns=yo[0]) if yo and len(yo) > 1 else pd.DataFrame(columns=yo[0] if yo else [])
+    return ozet, yorum, zaman
+
+
+def _temalar(deger):
+    return [t.strip() for t in str(deger or "").split(";") if t.strip()]
+
+
+def _yorum_kayitlari(yorum_df):
+    kayit = []
+    for _, r in yorum_df.iterrows():
+        tarih = str(r.get("Tarih", "") or "")
+        m = re.match(r"(\d{4})-(\d{2})-(\d{2})", tarih)
+        kayit.append({
+            "kod": str(r.get("Ürün Kodu", "") or "").strip(), "ad": str(r.get("Ürün Adı", "") or "").strip(),
+            "grup": str(r.get("Alt Grup", "") or "").strip(), "platform": str(r.get("Platform", "") or "").strip(),
+            "tarih": tarih, "tarih_metni": f"{m.group(3)}.{m.group(2)}.{m.group(1)}" if m else "",
+            "puan": _sayi(r.get("Puan")), "satici": str(r.get("Satıcı", "") or "").strip(),
+            "braun": str(r.get("Braun Shop", "")).strip().lower() == "evet",
+            "memnuniyet": _temalar(r.get("Memnuniyet Temaları")), "sikayet": _temalar(r.get("Şikayet Temaları")),
+            "metin": str(r.get("Yorum", "") or ""),
+        })
+    return kayit
+
+
+def _tema_sayimi(kayitlar, alan):
+    from collections import Counter
+    sayac = Counter(t for k in kayitlar for t in k[alan])
+    return sayac
+
+
+def _tema_listesi(sayac):
+    """Ürün temaları önce, sonra satıcı & kargo; her grupta çoktan aza."""
+    try:
+        from yorum_temalari import tema_gruplari
+        gruplar = tema_gruplari()
+    except Exception:
+        gruplar = {}
+    sira = {"Ürün": 0, "Satıcı & Kargo": 1}
+    liste = [{"tema": t, "grup": gruplar.get(t, "Diğer"), "adet": n} for t, n in sayac.items()]
+    return sorted(liste, key=lambda x: (sira.get(x["grup"], 2), -x["adet"]))
+
+
+def _yorum_excel(ozet_satirlari, kayitlar):
+    out = io.BytesIO()
+    with pd.ExcelWriter(out, engine="openpyxl") as w:
+        pd.DataFrame([{
+            "Ürün Kodu": s["kod"], "Ürün Adı": s["tam_ad"], "Alt Grup": s["grup"],
+            "TY Puan": (s["ty"] or {}).get("ortalama"), "TY Değerlendirme": (s["ty"] or {}).get("toplam"),
+            "HB Puan": (s["hb"] or {}).get("ortalama"), "HB Değerlendirme": (s["hb"] or {}).get("toplam"),
+            "Son Yorumlar Ortalama": s["son_ort"], "Okunan Yorum": s["okunan"],
+            "Şikayet Oranı (%)": s["sikayet_orani"],
+            "En Sık Şikayetler": ", ".join(f"{t} ({n})" for t, n in s["sikayetler"][:3]),
+            "En Çok Beğenilenler": ", ".join(f"{t} ({n})" for t, n in s["memnuniyetler"][:3]),
+        } for s in ozet_satirlari]).to_excel(w, index=False, sheet_name="Ürün Özeti")
+        pd.DataFrame([{
+            "Ürün Kodu": k["kod"], "Platform": k["platform"], "Tarih": k["tarih_metni"], "Puan": k["puan"],
+            "Satıcı": k["satici"], "Braun Shop": "Evet" if k["braun"] else "Hayır",
+            "Şikayet Temaları": ", ".join(k["sikayet"]), "Memnuniyet Temaları": ", ".join(k["memnuniyet"]),
+            "Yorum": k["metin"],
+        } for k in kayitlar]).to_excel(w, index=False, sheet_name="Yorumlar")
+    return out.getvalue()
+
+
+def yorum_sayfasi():
+    ozet_df, yorum_df, zaman = load_yorumlar()
+    tasarim.yorum_baslik(_tarih_metni(zaman).replace(" · ", " ") if zaman else "")
+    tasarim.veri_uyarilari(None, tarama_yasi_dk(zaman), YORUM_GECIKME_ESIGI_DK)
+    if ozet_df is None or ozet_df.empty:
+        st.warning("Henüz yorum verisi yok. Bilgisayarda yorum_script.py çalıştıktan sonra burada görünecek.")
+        return
+
+    fiyat_df, _ = load_data()
+    gorsel_map = {}
+    if fiyat_df is not None and "Ürün Kodu" in fiyat_df.columns and "Görsel" in fiyat_df.columns:
+        gorsel_map = {str(k).strip(): v for k, v in zip(fiyat_df["Ürün Kodu"], fiyat_df["Görsel"]) if v}
+
+    tum = _yorum_kayitlari(yorum_df) if yorum_df is not None and not yorum_df.empty else []
+
+    # ---- filtreler ----
+    c1, c2, c3, c4, c5 = st.columns([2.0, 1.75, 1.7, 1.6, 1])
+    with c1:
+        platform = st.segmented_control("Platform", ["Tümü", "Trendyol", "Hepsiburada"], default="Tümü",
+                                        key="yr_platform") or "Tümü"
+    with c2:
+        satici = st.segmented_control("Satıcı", ["Tüm satıcılar", "Braun Shop"], default="Tüm satıcılar",
+                                      key="yr_satici", help="Braun Shop: sadece Braun Shop'tan alan müşterilerin yorumları. "
+                                      "Platform puanı ve toplam değerlendirme her zaman tüm satıcılarındır.") or "Tüm satıcılar"
+    with c3:
+        ara = st.text_input("Ürün ara", placeholder="Ürün adı ya da kodu", key="yr_ara")
+    with c4:
+        gruplar = sorted({str(g) for g in ozet_df.get("Alt Grup", []) if str(g).strip()})
+        secilen = st.multiselect("Alt Grup", gruplar, placeholder="Tümü", key="yr_grup")
+
+    ozet = ozet_df.copy()
+    if platform != "Tümü":
+        ozet = ozet[ozet["Platform"] == platform]
+    if secilen:
+        ozet = ozet[ozet["Alt Grup"].isin(secilen)]
+    if ara and ara.strip():
+        a = ara.strip().casefold()
+        ozet = ozet[(ozet["Ürün Adı"].str.casefold().str.contains(a, regex=False))
+                    | (ozet["Ürün Kodu"].str.casefold().str.contains(a, regex=False))]
+    kodlar = set(ozet["Ürün Kodu"])
+    kayitlar = [k for k in tum if k["kod"] in kodlar and (platform == "Tümü" or k["platform"] == platform)
+                and (satici != "Braun Shop" or k["braun"])]
+
+    # ---- KPI ----
+    toplam = sum(_sayi(v) or 0 for v in ozet["Toplam Değerlendirme"])
+    agirlik = sum((_sayi(t) or 0) * (_sayi(o) or 0) for t, o in zip(ozet["Toplam Değerlendirme"], ozet["Ortalama Puan"])
+                  if _sayi(o) is not None)
+    ort = agirlik / toplam if toplam else None
+    puanlar = [k["puan"] for k in kayitlar if k["puan"] is not None]
+    sikayetli = sum(1 for k in kayitlar if k["sikayet"])
+    platform_say = {p: sum(_sayi(v) or 0 for v in ozet[ozet["Platform"] == p]["Toplam Değerlendirme"])
+                    for p in ("Trendyol", "Hepsiburada")}
+    tasarim.yorum_kpi({
+        "toplam": toplam,
+        "toplam_alt": " · ".join(f"{'TY' if p == 'Trendyol' else 'HB'} {int(n):,}".replace(",", ".")
+                                 for p, n in platform_say.items() if n),
+        "ortalama": ort,
+        "ortalama_alt": (f"Okunan son yorumlarda: {sum(puanlar) / len(puanlar):.2f}".replace(".", ",")
+                         + (" (Braun Shop)" if satici == "Braun Shop" else "")) if puanlar else "Platform puanı",
+        "okunan": len(kayitlar),
+        "okunan_alt": (f"Braun Shop'tan alanlar · {len({k['kod'] for k in kayitlar})} ürün" if satici == "Braun Shop"
+                       else f"Ürün ve platform başına son 100 · Braun Shop: {sum(1 for k in kayitlar if k['braun'])}"),
+        "sikayet_orani": sikayetli / len(kayitlar) * 100 if kayitlar else None,
+        "sikayet_alt": f"{sikayetli} yorum",
+    })
+
+    # ---- tema panelleri ----
+    tasarim.tema_panelleri(_tema_listesi(_tema_sayimi(kayitlar, "sikayet")),
+                           _tema_listesi(_tema_sayimi(kayitlar, "memnuniyet")), len(kayitlar))
+    st.markdown("<div style='height:18px'></div>", unsafe_allow_html=True)
+
+    # ---- ürün tablosu ----
+    satirlar = []
+    for kod, g in ozet.groupby("Ürün Kodu", sort=False):
+        ilk = g.iloc[0]
+
+        def platform_ozeti(p):
+            x = g[g["Platform"] == p]
+            if x.empty:
+                return None
+            x = x.iloc[0]
+            return {"ortalama": _sayi(x.get("Ortalama Puan")), "toplam": _sayi(x.get("Toplam Değerlendirme")),
+                    "durum": str(x.get("Durum", "") or "")}
+        uk = [k for k in kayitlar if k["kod"] == kod]
+        pu = [k["puan"] for k in uk if k["puan"] is not None]
+        dagilim = {y: sum(1 for p in pu if int(p) == y) for y in (1, 2, 3, 4, 5)}
+        satirlar.append({
+            "kod": kod, "tam_ad": str(ilk.get("Ürün Adı", "")), "grup": str(ilk.get("Alt Grup", "")),
+            "gorsel": str(gorsel_map.get(kod, "") or ""),
+            "ty": platform_ozeti("Trendyol"), "hb": platform_ozeti("Hepsiburada"),
+            "okunan": len(uk), "son_ort": sum(pu) / len(pu) if pu else None, "dagilim": dagilim,
+            "sikayet_orani": sum(1 for k in uk if k["sikayet"]) / len(uk) * 100 if uk else None,
+            "sikayetler": _tema_sayimi(uk, "sikayet").most_common(3),
+            "memnuniyetler": _tema_sayimi(uk, "memnuniyet").most_common(3),
+        })
+    satirlar.sort(key=lambda s: (s["sikayet_orani"] is None, -(s["sikayet_orani"] or 0)))
+
+    with c5:
+        st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
+        zaman_ek = (datetime.now(timezone.utc) + timedelta(hours=3)).strftime("%d-%m-%Y")
+        st.download_button("📥 Excel'e Aktar", _yorum_excel(satirlar, kayitlar), f"Yorum_Analizi_{zaman_ek}.xlsx",
+                           "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", key="yr_excel")
+    tasarim.yorum_urun_tablosu(satirlar)
+    st.markdown("<div style='height:18px'></div>", unsafe_allow_html=True)
+
+    # ---- örnek yorumlar ----
+    with st.container(key="pt_yorum_ornek"):
+        st.markdown('<div class="yt-head"><span class="ttl">Yorumları oku</span><span>Seçtiğin temaya göre en yeni yorumlar</span></div>',
+                    unsafe_allow_html=True)
+        sikayet_tema = [x["tema"] for x in _tema_listesi(_tema_sayimi(kayitlar, "sikayet"))]
+        memnun_tema = [x["tema"] for x in _tema_listesi(_tema_sayimi(kayitlar, "memnuniyet"))]
+        secenekler = (["Tüm yorumlar", "Düşük puanlılar (1-2 ★)"] + [f"Şikayet · {t}" for t in sikayet_tema]
+                      + [f"Memnuniyet · {t}" for t in memnun_tema])
+        d1, d2, d3 = st.columns([2.2, 1.6, 1])
+        with d1:
+            secim = st.selectbox("Tema", secenekler, index=2 if len(secenekler) > 2 else 0, key="yr_tema")
+        with d2:
+            urun_sec = st.selectbox("Ürün", ["Tüm ürünler"] + [s["kod"] for s in satirlar], key="yr_urun")
+        with d3:
+            adet = st.selectbox("Göster", [10, 25, 50, 100], key="yr_adet")
+        liste = kayitlar
+        if urun_sec != "Tüm ürünler":
+            liste = [k for k in liste if k["kod"] == urun_sec]
+        if secim.startswith("Şikayet · "):
+            liste = [k for k in liste if secim[10:] in k["sikayet"]]
+        elif secim.startswith("Memnuniyet · "):
+            liste = [k for k in liste if secim[13:] in k["memnuniyet"]]
+        elif secim.startswith("Düşük"):
+            liste = [k for k in liste if k["puan"] is not None and k["puan"] <= 2]
+        liste = sorted(liste, key=lambda k: k["tarih"], reverse=True)
+        st.caption(f"{len(liste)} yorum")
+        tasarim.ornek_yorum_listesi(liste[:adet])
+
+
 # ================= SAYFA =================
 tasarim.tema_uygula()
 for _kanal in KANALLAR:
@@ -622,6 +877,7 @@ for _kanal in KANALLAR:
                                          f'referrerpolicy="no-referrer" style="{_stil}">')
 
 FIYAT_SEKMESI, BUYBOX_SEKMESI = ":material/bar_chart: Ürün Takibi", ":material/shopping_cart: BuyBox"
+YORUM_SEKMESI = ":material/reviews: Yorum Analizi"
 
 
 def _tarih_metni(guncelleme):
@@ -639,12 +895,18 @@ def _son_tarama(aktif):
         _, bb_zaman = load_buybox()
         bb_yas = tarama_yasi_dk(bb_zaman)
         return _tarih_metni(bb_zaman), (bb_yas is None or bb_yas <= BB_GECIKME_ESIGI_DK), "Son BuyBox taraması"
+    if aktif == YORUM_SEKMESI:
+        _, _, y_zaman = load_yorumlar()
+        y_yas = tarama_yasi_dk(y_zaman)
+        return _tarih_metni(y_zaman), (y_yas is None or y_yas <= YORUM_GECIKME_ESIGI_DK), "Son yorum taraması"
     return _tarih_metni(_guncelleme), (_yas is None or _yas <= GECIKME_ESIGI_DK), "Son fiyat taraması"
 
 
-_aktif = tasarim.ust_baslik([FIYAT_SEKMESI, BUYBOX_SEKMESI], _son_tarama)
+_aktif = tasarim.ust_baslik([FIYAT_SEKMESI, BUYBOX_SEKMESI, YORUM_SEKMESI], _son_tarama)
 if _aktif == BUYBOX_SEKMESI:
     buybox_sayfasi()
+elif _aktif == YORUM_SEKMESI:
+    yorum_sayfasi()
 else:
     fiyat_buybox_sayfasi(_df_fiyat, _yas)
 tasarim.alt_bant()

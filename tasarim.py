@@ -379,7 +379,7 @@ _UST_CSS = """<style>
 .st-key-sekme [data-testid="stButtonGroup"] > div:last-child{display:inline-flex !important;flex-wrap:nowrap !important;
   width:auto !important;max-width:none !important;overflow:visible !important;gap:4px;background:#ffffff;
   border:1.5px solid #121212;border-radius:999px;padding:5px;}
-.st-key-sekme button{flex-shrink:0;white-space:nowrap;height:44px;padding:0 20px !important;border:0 !important;outline:none;
+.st-key-sekme button{flex-shrink:0;white-space:nowrap;height:44px;padding:0 16px !important;border:0 !important;outline:none;
   border-radius:999px !important;background:transparent !important;box-shadow:none !important;color:#121212 !important;}
 .st-key-sekme button p{color:#121212 !important;font-size:15px;font-weight:500;}
 .st-key-sekme button:hover{background:#FFF8B3 !important;}
@@ -458,7 +458,7 @@ def ust_baslik(sekmeler: list[str], son_tarama_fn) -> str:
     aktif = st.session_state["aktif_sekme"]
     tarih, canli, etiket = son_tarama_fn(aktif)
     with st.container(key="ust_baslik"):
-        sol, orta, sag = st.columns([1.15, 2.3, 1.05], gap="small")
+        sol, orta, sag = st.columns([1.75, 1.8, 1.05], gap="small")
         with sol:
             st.segmented_control("Sekme", sekmeler, key="sekme", on_change=_degisti, label_visibility="collapsed")
         with orta:
@@ -1011,7 +1011,7 @@ def alt_bant() -> None:
         kutular += '<div class="pt-logo">' + (logo or html.escape(k["ad"])) + "</div>"
     st.markdown(
         '<div class="pt-footer" lang="tr"><div class="top"><span>Takip edilen satış kanalları</span>'
-        '<span style="text-transform:none;letter-spacing:0;font-weight:500">Sağlık kategorisi · Ürün Takibi &amp; BuyBox</span></div>'
+        '<span style="text-transform:none;letter-spacing:0;font-weight:500">Sağlık kategorisi · Ürün Takibi, BuyBox &amp; Yorum Analizi</span></div>'
         f'<div class="pt-logos">{kutular}</div></div>',
         unsafe_allow_html=True)
 
@@ -1064,3 +1064,206 @@ def govde(satirlar: list[dict], esik: float = 5, tablo_notu: str = "", klasik: b
             fiyat_tablosu(h, filtre, tablo_notu)
     with sag:
         yan_panel(h)
+
+
+# --------------------------------------------------------------------------
+# [eklendi] YORUM ANALİZİ sekmesi
+# --------------------------------------------------------------------------
+_YORUM_CSS = """<style>
+.st-key-pt_yorum_temalar, .st-key-pt_yorum_tablo, .st-key-pt_yorum_ornek { background:#FFFFFF; border:1px solid #DCE9E1;
+  border-radius:20px; box-shadow:0 6px 24px rgba(20,70,45,.06); padding:20px 22px 14px; }
+.yt-head { display:flex; justify-content:space-between; align-items:baseline; gap:10px; margin-bottom:12px; }
+.yt-head .ttl { margin:0; font-size:17px; font-weight:800; color:#10281B; }
+.yt-head span { font-size:12px; color:#6A7E72; }
+.yt-bar { display:grid; grid-template-columns:minmax(0,190px) minmax(0,1fr) 92px; gap:10px; align-items:center; padding:5px 0; }
+.yt-bar .ad { font-size:13.5px; font-weight:700; color:#15261D; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.yt-bar .ad small { display:block; font-size:10.5px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:#8A9A90; }
+.yt-bar .iz { height:12px; border-radius:999px; background:#F1F4F2; overflow:hidden; }
+.yt-bar .iz i { display:block; height:100%; border-radius:999px; }
+.yt-bar .iz i.kotu { background:linear-gradient(90deg,#E8806F,#D2402F); }
+.yt-bar .iz i.iyi { background:linear-gradient(90deg,#6CC596,#1F9D57); }
+.yt-bar .sy { text-align:right; font-variant-numeric:tabular-nums; font-size:13px; font-weight:800; color:#15261D; white-space:nowrap; }
+.yt-bar .sy small { font-size:11px; font-weight:600; color:#6A7E72; margin-left:4px; }
+.yt-ayrac { font-size:10.5px; font-weight:800; letter-spacing:.07em; text-transform:uppercase; color:#8A9A90;
+            border-top:1px dashed #E1EAE4; margin:8px 0 2px; padding-top:8px; }
+.yt-bos { font-size:13px; color:#7A8C81; padding:10px 0; }
+.yt-puan { display:inline-flex; align-items:center; gap:4px; padding:3px 10px; border-radius:999px; font-weight:800;
+           font-size:13px; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.yt-puan.iyi { background:#E3F4EA; color:#166B3D; } .yt-puan.orta { background:#FFF1CC; color:#7A5200; }
+.yt-puan.kotu { background:#FBDCD8; color:#9E2418; } .yt-puan.yok { background:#F1F4F2; color:#7A8680; }
+.yt-alt { display:block; font-size:11px; color:#6A7E72; margin-top:3px; white-space:nowrap; }
+.yt-alt.uyari { color:#B4531A; font-weight:700; }
+.yt-tema { display:inline-block; font-size:11.5px; font-weight:700; padding:2px 8px; border-radius:7px; margin:1px 2px; white-space:nowrap; }
+.yt-tema.kotu { background:#FDE6E2; color:#A3261A; } .yt-tema.iyi { background:#E6F5EC; color:#14693A; }
+.yt-oran { font-weight:800; font-variant-numeric:tabular-nums; }
+.yt-oran.kotu { color:#B3291B; } .yt-oran.orta { color:#7F5300; } .yt-oran.iyi { color:#166B3D; }
+.yt-yorum { padding:12px 0; border-bottom:1px solid #EEF3F0; }
+.yt-yorum:last-child { border-bottom:0; }
+.yt-yorum .ust { display:flex; flex-wrap:wrap; gap:8px; align-items:center; font-size:12px; color:#6A7E72; margin-bottom:5px; }
+.yt-yorum .ust b { color:#15261D; }
+.yt-yildiz { color:#E0A100; letter-spacing:1px; font-size:13px; }
+.yt-yildiz .bos { color:#D6DDD9; }
+.yt-yorum p { margin:0; font-size:14px; line-height:1.5; color:#15261D; }
+.yt-braun { font-size:10px; font-weight:800; background:#178A4E; color:#fff; padding:1px 6px; border-radius:5px; letter-spacing:.03em; }
+.yt-yigin { display:flex; width:130px; height:9px; border-radius:99px; overflow:hidden; background:#F1F4F2; margin:0 auto; cursor:help; }
+.yt-yigin i { display:block; height:100%; }
+</style>"""
+
+
+def _puan_rozet(p, alt: str = "") -> str:
+    if p is None:
+        return '<span class="yt-puan yok">–</span>'
+    sinif = "iyi" if p >= 4.5 else ("orta" if p >= 4.0 else "kotu")
+    return (f'<span class="yt-puan {sinif}">★ {p:.2f}'.replace(".", ",") + "</span>"
+            + (f'<span class="yt-alt">{html.escape(alt)}</span>' if alt else ""))
+
+
+def _sayi_metni(n) -> str:
+    return f"{int(n):,}".replace(",", ".") if n is not None else "–"
+
+
+def yorum_baslik(zaman: str = "") -> None:
+    sol, sag = st.columns([1, 1])
+    with sol:
+        st.markdown('<div class="pt-title"><h1>Yorum Analizi</h1></div>', unsafe_allow_html=True)
+    with sag:
+        if zaman:
+            st.markdown(f'<div class="pt-legend" style="padding-top:22px"><span style="color:#6A7E72">Yorum verisi: '
+                        f'<b style="color:#15261D">{html.escape(zaman)}</b> · Pazartesi ve Perşembe güncellenir</span></div>',
+                        unsafe_allow_html=True)
+
+
+def yorum_kpi(k: dict) -> None:
+    ort = k.get("ortalama")
+    ort_m = f"{ort:.2f}".replace(".", ",") if ort is not None else "–"
+    sik = k.get("sikayet_orani")
+    sik_m = f"%{sik:.0f}" if sik is not None else "–"
+    st.markdown(_YORUM_CSS + f"""<div class="pt-kpis">
+<div class="pt-card pt-kpi"><span class="lbl">Toplam değerlendirme</span>
+  <div class="val"><b class="num">{_sayi_metni(k.get("toplam"))}</b><span>puan</span></div>
+  <span class="sub">{html.escape(k.get("toplam_alt", ""))} · tüm satıcılar</span></div>
+<div class="pt-card pt-kpi"><span class="lbl">Ortalama puan</span>
+  <div class="val"><b class="num">{ort_m}</b><span>/ 5</span></div>
+  <span class="sub">{html.escape(k.get("ortalama_alt", ""))}</span></div>
+<div class="pt-card pt-kpi"><span class="lbl">Analiz edilen yorum</span>
+  <div class="val"><b class="num">{_sayi_metni(k.get("okunan"))}</b><span>yorum</span></div>
+  <span class="sub">{html.escape(k.get("okunan_alt", ""))}</span></div>
+<div class="pt-card pt-kpi{' bad' if sik is not None and sik >= 15 else ''}"><span class="lbl">Şikayet içeren yorum</span>
+  <div class="val"><b class="num">{sik_m}</b><span>{html.escape(k.get("sikayet_alt", ""))}</span></div>
+  <span class="sub">En az bir şikayet teması geçen yorumlar</span></div>
+</div>""", unsafe_allow_html=True)
+
+
+def _tema_barlari(liste: list[dict], tur: str, toplam: int) -> str:
+    if not liste:
+        return '<div class="yt-bos">Bu filtrede tema bulunamadı.</div>'
+    en = max(x["adet"] for x in liste) or 1
+    govde, son_grup = "", None
+    for x in liste:
+        if x["grup"] != son_grup:
+            govde += f'<div class="yt-ayrac">{html.escape(x["grup"])}</div>'
+            son_grup = x["grup"]
+        oran = x["adet"] / toplam * 100 if toplam else 0
+        govde += (f'<div class="yt-bar"><span class="ad" title="{html.escape(x["tema"], quote=True)}">{html.escape(x["tema"])}</span>'
+                  f'<span class="iz"><i class="{tur}" style="width:{max(4, x["adet"] / en * 100):.0f}%"></i></span>'
+                  f'<span class="sy">{x["adet"]}<small>%{oran:.0f}</small></span></div>')
+    return govde
+
+
+def tema_panelleri(sikayet: list[dict], memnuniyet: list[dict], okunan: int) -> None:
+    """sikayet / memnuniyet: [{"tema", "grup", "adet"}] (grup sırasına göre sıralı)"""
+    with st.container(key="pt_yorum_temalar"):
+        a, b = st.columns(2, gap="large")
+        with a:
+            st.markdown('<div class="yt-head"><span class="ttl">Neden şikayet ediliyor?</span><span>yorum sayısı · okunan yorumlara oranı</span></div>'
+                        + _tema_barlari(sikayet, "kotu", okunan), unsafe_allow_html=True)
+        with b:
+            st.markdown('<div class="yt-head"><span class="ttl">Neyi beğeniyorlar?</span><span>yorum sayısı · okunan yorumlara oranı</span></div>'
+                        + _tema_barlari(memnuniyet, "iyi", okunan), unsafe_allow_html=True)
+
+
+def _dagilim_html(d: dict) -> str:
+    """Okunan yorumların yıldız dağılımı: tek satır yığılmış çubuk (5★ yeşil ... 1★ kırmızı)."""
+    toplam = sum(d.values())
+    if not toplam:
+        return ""
+    renk = {5: "#1F9D57", 4: "#8CCB6A", 3: "#F0C54A", 2: "#EE8A55", 1: "#D2402F"}
+    parca = "".join(f'<i style="width:{d.get(y, 0) / toplam * 100:.1f}%;background:{renk[y]}"></i>'
+                    for y in (5, 4, 3, 2, 1) if d.get(y))
+    ipucu = " · ".join(f"{y}★ {d.get(y, 0)}" for y in (5, 4, 3, 2, 1))
+    dusuk = (d.get(1, 0) + d.get(2, 0)) / toplam * 100
+    return (f'<span class="yt-yigin" title="{ipucu}">{parca}</span>'
+            f'<span class="yt-alt">1-2★: %{dusuk:.0f}</span>')
+
+
+def _platform_hucre(p: dict | None) -> str:
+    if not p:
+        return '<span class="pt-yok" title="Bu platformda ilan tanımlı değil">–</span>'
+    alt = f"{_sayi_metni(p.get('toplam'))} değerlendirme" if p.get("toplam") not in (None, "") else ""
+    h = _puan_rozet(p.get("ortalama"), alt)
+    durum = str(p.get("durum") or "")
+    if durum and durum != "Tamam":
+        kisa = "eski veri" if durum.startswith(("Eski", "Yorumlar eski")) else ("okunamadı" if durum.startswith("Okunamad") else "kısmi")
+        h += f'<span class="yt-alt uyari" title="{html.escape(durum, quote=True)}">⚠ {kisa}</span>'
+    return h
+
+
+def yorum_urun_tablosu(satirlar: list[dict]) -> None:
+    """satirlar: kod, tam_ad, grup, gorsel, ty, hb (platform özetleri), okunan, son_ort, dagilim, sikayet_orani,
+    sikayetler [(tema, adet)], memnuniyetler [(tema, adet)]"""
+    with st.container(key="pt_yorum_tablo"):
+        st.markdown('<div class="yt-head"><span class="ttl">Ürün bazlı yorum özeti</span><span>Platform puanı ürünün tamamı; '
+                    'diğer sütunlar okunan son yorumlardan</span></div>', unsafe_allow_html=True)
+        logo = lambda ad: (f'<div class="logo">{KANAL_LOGOLARI[ad]}</div>' if KANAL_LOGOLARI.get(ad) else f"<b>{ad}</b>")
+        bas = ("<th>Ürün Kodu</th><th>Alt Grup</th>"
+               f'<th class="ch">{logo("Trendyol")}<small>puan · değerlendirme</small></th>'
+               f'<th class="ch">{logo("Hepsiburada")}<small>puan · değerlendirme</small></th>'
+               "<th>Son yorumlar<small>ortalama · okunan</small></th><th>Yıldız dağılımı<small>5★ → 1★ · üzerine gel</small></th>"
+               "<th>Şikayet oranı</th><th>En sık şikayet</th><th>En çok beğenilen</th>")
+        govde = ""
+        for r in satirlar:
+            so = r.get("sikayet_orani")
+            sinif = "yok" if so is None else ("kotu" if so >= 20 else ("orta" if so >= 10 else "iyi"))
+            so_m = f'<span class="yt-oran {sinif}">%{so:.0f}</span>' if so is not None else '<span class="pt-yok">–</span>'
+            sik = "".join(f'<span class="yt-tema kotu">{html.escape(t)} · {n}</span>' for t, n in r.get("sikayetler", [])[:2]) \
+                or '<span class="pt-yok">–</span>'
+            mem = "".join(f'<span class="yt-tema iyi">{html.escape(t)} · {n}</span>' for t, n in r.get("memnuniyetler", [])[:2]) \
+                or '<span class="pt-yok">–</span>'
+            govde += ("<tr>"
+                      f"<td>{_kod_html(r)}</td>"
+                      f'<td><span class="pt-grp">{html.escape(str(r.get("grup") or ""))}</span></td>'
+                      f"<td>{_platform_hucre(r.get('ty'))}</td><td>{_platform_hucre(r.get('hb'))}</td>"
+                      f"<td>{_puan_rozet(r.get('son_ort'), str(r.get('okunan') or 0) + ' yorum')}</td>"
+                      f"<td>{_dagilim_html(r.get('dagilim') or {}) or '<span class=pt-yok>–</span>'}</td>"
+                      f"<td>{so_m}</td><td style='text-align:left !important'>{sik}</td>"
+                      f"<td style='text-align:left !important'>{mem}</td></tr>")
+        st.markdown(f'<table class="pt-tablo" lang="tr"><thead><tr>{bas}</tr></thead><tbody>{govde}</tbody></table>'
+                    '<div class="pt-foot-note"><span>Puan rengi: yeşil 4,5+ · sarı 4,0–4,5 · kırmızı 4,0 altı</span>'
+                    '<span>Şikayet oranı: okunan yorumlarda en az bir şikayet teması geçenlerin payı</span>'
+                    '<span>⚠ işaretinin üzerine gelince tarama notu görünür</span></div>',
+                    unsafe_allow_html=True)
+
+
+def _yildiz(p) -> str:
+    try:
+        p = max(0, min(5, int(p)))
+    except (TypeError, ValueError):
+        return ""
+    return f'<span class="yt-yildiz">{"★" * p}<span class="bos">{"★" * (5 - p)}</span></span>'
+
+
+def ornek_yorum_listesi(yorumlar: list[dict], vurgu: str = "") -> None:
+    if not yorumlar:
+        st.markdown('<div class="yt-bos">Bu seçimde yorum yok.</div>', unsafe_allow_html=True)
+        return
+    govde = ""
+    for y in yorumlar:
+        braun = '<span class="yt-braun">BRAUN SHOP</span>' if y.get("braun") else ""
+        temalar = "".join(f'<span class="yt-tema kotu">{html.escape(t)}</span>' for t in y.get("sikayet", [])) + \
+            "".join(f'<span class="yt-tema iyi">{html.escape(t)}</span>' for t in y.get("memnuniyet", []))
+        govde += (f'<div class="yt-yorum"><div class="ust">{_yildiz(y.get("puan"))}<b>{html.escape(y.get("kod", ""))}</b>'
+                  f'<span>{html.escape(y.get("platform", ""))}</span>'
+                  + (braun if y.get("braun") else f'<span>· {html.escape(y.get("satici", "") or "satıcı bilinmiyor")}</span>') +
+                  f'<span>· {html.escape(y.get("tarih_metni", ""))}</span>{temalar}</div>'
+                  f'<p>{html.escape(y.get("metin", ""))}</p></div>')
+    st.markdown(govde, unsafe_allow_html=True)
