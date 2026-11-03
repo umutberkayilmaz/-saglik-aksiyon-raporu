@@ -879,18 +879,43 @@ def yorum_sayfasi():
     sikayetli = sum(1 for k in kayitlar if k["sikayet"])
     puanlar = [k["puan"] for k in kayitlar if k["puan"] is not None]
     tasarim.yorum_platform_bandi(platform, len(satirlar), braun=(satici == "Braun Shop"))
-    tasarim.yorum_kpi({
-        "toplam": toplam,
-        "toplam_alt": (f"{int(sum(yorumlu)):,} yazılı yorum".replace(",", ".") if yorumlu
-                       else "yıldızlı + yorumlu tüm değerlendirmeler") + " · tüm satıcılar",
-        "ortalama": agirlik / toplam if toplam else None,
-        "ortalama_alt": "Değerlendirme sayısına göre ağırlıklı" + (
-            f" · son yorumlarda {sum(puanlar) / len(puanlar):.2f}".replace(".", ",") if puanlar else ""),
-        "hiz": sum(hizlar) if hizlar else None,
-        "hiz_alt": f"Son {len(satirlar[0]['seri']) - 1 if satirlar and satirlar[0]['seri'] else 11} tamamlanan haftanın ortalaması",
-        "sikayet_orani": sikayetli / len(kayitlar) * 100 if kayitlar else None,
-        "sikayet_alt": f"{sikayetli} / {len(kayitlar)} yorum" + (" · Braun Shop" if satici == "Braun Shop" else ""),
-    })
+    # ---- göstergeler: tek bakışta durum ----
+    p_say = {"iyi": 0, "orta": 0, "kotu": 0}
+    for x in satirlar:
+        if x["puan"] is None:
+            continue
+        p_say["iyi" if x["puan"] >= 4.5 else ("orta" if x["puan"] >= 4.0 else "kotu")] += 1
+    puanli = [x for x in satirlar if x["puan"] is not None and (x["toplam"] or 0) >= 5]
+    if puanli:
+        en_d = min(puanli, key=lambda x: x["puan"])
+        p_say["en_dusuk"] = (tasarim._urun_link(en_d), en_d["puan"])
+    sik_sayac = _tema_sayimi(kayitlar, "sikayet")
+    sorun = None
+    if sik_sayac:
+        tema, adet = sik_sayac.most_common(1)[0]
+        enc = max(satirlar, key=lambda x: x["sikayet_say"].get(tema, 0))
+        sorun = {"tema": tema, "adet": adet, "oran": adet / len(kayitlar) * 100,
+                 "urun": tasarim._urun_link(enc), "urun_adet": enc["sikayet_say"].get(tema, 0)}
+    adaylar = [x for x in satirlar if x["okunan"] >= 10 and x["sikayet_orani"] is not None]
+    dikkat = None
+    if adaylar:
+        x = max(adaylar, key=lambda x: x["sikayet_orani"])
+        dikkat = {"link": tasarim._urun_link(x), "oran": x["sikayet_orani"], "n": x["okunan"],
+                  "sik": round(x["sikayet_orani"] * x["okunan"] / 100), "puan": x["puan"],
+                  "tema": x["sikayetler"][0][0] if x["sikayetler"] else ""}
+    bugun = (datetime.now(timezone.utc) + timedelta(hours=3)).date()
+    s30 = (bugun - timedelta(days=30)).isoformat()
+    s120 = (bugun - timedelta(days=120)).isoformat()
+    son = [k for k in kayitlar if k["tarih"] >= s30]
+    once = [k for k in kayitlar if s120 <= k["tarih"] < s30]
+
+    def _ort(l):
+        v = [k["puan"] for k in l if k["puan"] is not None]
+        return sum(v) / len(v) if v else None
+    trend = {"son_n": len(son), "son_puan": _ort(son), "once_puan": _ort(once),
+             "son_sik": sum(1 for k in son if k["sikayet"]) / len(son) * 100 if son else 0,
+             "once_sik": sum(1 for k in once if k["sikayet"]) / len(once) * 100 if once else None}
+    tasarim.yorum_gostergeleri({"puan": p_say, "sorun": sorun, "dikkat": dikkat, "trend": trend})
 
     # ---- tema panelleri + harita ----
     tasarim.tema_panelleri(_tema_listesi(_tema_sayimi(kayitlar, "sikayet")),

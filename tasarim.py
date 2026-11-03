@@ -1199,7 +1199,24 @@ def platform_temasi(platform: str) -> dict:
 .yt-pf-bant {{ display:flex; align-items:center; gap:16px; padding:14px 20px; margin:10px 0 4px; border-radius:16px;
   background:linear-gradient(90deg,{r["acik"]},#FFFFFF 70%); border:1px solid {r["cizgi"]}; border-left:6px solid {r["ana"]}; }}
 .yt-pf-bant .logo img, .yt-pf-bant .logo svg {{ height:26px; max-width:150px; object-fit:contain; }}
-.yt-pf-bant b {{ font-size:18px; color:{r["ikincil"]}; }} .yt-pf-bant span {{ font-size:13px; color:#52675A; }}
+.yt-pf-bant b {{ font-size:18px; color:{r["ikincil"]}; }} .yt-pf-bant .ac {{ font-size:13px; color:#52675A; line-height:1.4; }}
+.yt-pf-bant .filtre {{ flex:none; display:inline-flex; align-items:center; gap:6px; white-space:nowrap; font-size:12.5px;
+  font-weight:700; color:#14693A; background:#E6F5EC; border:1px solid #BFE3CD; border-radius:999px; padding:5px 12px; }}
+.yt-pf-bant .filtre::before {{ content:""; width:7px; height:7px; border-radius:50%; background:#1F9D57; }}
+.yt-gst {{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:16px; margin:14px 0 22px; }}
+.yt-gst .kart {{ background:#fff; border:1px solid #DCE9E1; border-radius:18px; padding:16px 18px; display:flex; flex-direction:column;
+  gap:6px; box-shadow:0 4px 18px rgba(20,70,45,.05); border-top:3px solid {r["ana"]}; }}
+.yt-gst .lbl {{ font-size:12px; font-weight:700; color:#5E7366; letter-spacing:.02em; text-transform:uppercase; }}
+.yt-gst .ana {{ font-size:19px; font-weight:800; color:#10281B; line-height:1.25; }}
+.yt-gst .ana a {{ color:inherit !important; text-decoration:none !important; border-bottom:1.5px solid {r["cizgi"]}; }}
+.yt-gst .alt {{ font-size:12.5px; color:#52675A; line-height:1.45; }}
+.yt-gst .alt b {{ color:#15261D; }}
+.yt-gst .bant3 {{ display:flex; height:8px; border-radius:99px; overflow:hidden; background:#F1F4F2; margin:2px 0; }}
+.yt-gst .bant3 i {{ display:block; height:100%; }}
+.yt-gst .leg {{ display:flex; gap:10px; font-size:11.5px; color:#52675A; flex-wrap:wrap; }}
+.yt-gst .leg span::before {{ content:""; display:inline-block; width:8px; height:8px; border-radius:2px; margin-right:4px; background:var(--c); }}
+.yt-gst .kart.kotu {{ border-top-color:#D2402F; }} .yt-gst .kart.iyi {{ border-top-color:#1F9D57; }}
+.yt-gst .ok {{ font-weight:800; }} .yt-gst .ok.up {{ color:#178A4E; }} .yt-gst .ok.down {{ color:#C4311F; }}
 .pt-kpi.pf .val b {{ color:{r["koyu"]}; }}
 .pt-kpi.pf {{ border-top:3px solid {r["ana"]}; }}
 table.pt-tablo.yt-pf thead th {{ border-bottom:2px solid {r["ana"]} !important; }}
@@ -1223,12 +1240,72 @@ a.yt-urun-link::after {{ content:" ↗"; font-size:10px; color:{r["ana"]}; }}
 
 def yorum_platform_bandi(platform: str, urun_sayisi: int, braun: bool = False) -> None:
     logo = KANAL_LOGOLARI.get(platform, "")
-    filtre = ('<span class="yt-braun" style="font-size:11px;padding:3px 8px">SADECE BRAUN SHOP\'TAN ALANLAR</span>'
-              '<span>Temalar, harita, şikayet oranı ve yorumlar yalnızca Braun Shop müşterilerinin yorumlarından; '
-              'puan ve değerlendirme sayısı ürünün tamamı</span>' if braun else
-              f'<span>{urun_sayisi} ürün · puanlar ve sayılar {html.escape(platform)} sitesindekiyle aynı · tüm satıcılar</span>')
-    st.markdown(f'<div class="yt-pf-bant"><span class="logo">{logo}</span><b>{html.escape(platform)}</b>{filtre}</div>',
-                unsafe_allow_html=True)
+    isim = f'<span class="logo">{logo}</span>' if logo else f"<b>{html.escape(platform)}</b>"   # logo varsa sadece logo
+    filtre = ('<span class="filtre">Sadece Braun Shop\'tan alanlar</span>'
+              '<span class="ac">Temalar, harita, şikayet oranı ve yorumlar yalnızca Braun Shop müşterilerinin yorumlarından; '
+              'puan ve değerlendirme sayısı ürünün tamamı.</span>' if braun else
+              f'<span class="ac">{urun_sayisi} ürün · puanlar ve sayılar sitedekiyle aynı · tüm satıcılar</span>')
+    st.markdown(f'<div class="yt-pf-bant">{isim}{filtre}</div>', unsafe_allow_html=True)
+
+
+def _virgul(x, basamak: int = 1) -> str:
+    return f"{x:.{basamak}f}".replace(".", ",")
+
+
+def yorum_gostergeleri(g: dict) -> None:
+    """Tek bakışta okunan 4 gösterge: puan durumu, öne çıkan sorun, dikkat gereken ürün, son 30 gün."""
+    kartlar = []
+    # 1) puan durumu
+    p = g.get("puan") or {}
+    top = (p.get("iyi", 0) + p.get("orta", 0) + p.get("kotu", 0)) or 1
+    bant = "".join(f'<i style="width:{p.get(k, 0) / top * 100:.1f}%;background:{c}"></i>'
+                   for k, c in (("iyi", "#1F9D57"), ("orta", "#F0C54A"), ("kotu", "#D2402F")) if p.get(k))
+    dusuk = p.get("en_dusuk")
+    kartlar.append(
+        f'<div class="kart{" kotu" if p.get("kotu") else ""}"><span class="lbl">Puan durumu</span>'
+        f'<span class="ana">{p.get("iyi", 0)} ürün 4,5+ · {p.get("kotu", 0)} ürün 4,0 altı</span>'
+        f'<span class="bant3">{bant}</span>'
+        f'<span class="leg"><span style="--c:#1F9D57">4,5+ : {p.get("iyi", 0)}</span><span style="--c:#F0C54A">4,0–4,5 : {p.get("orta", 0)}</span>'
+        f'<span style="--c:#D2402F">4,0 altı : {p.get("kotu", 0)}</span></span>'
+        + (f'<span class="alt">En düşük puan: <b>{dusuk[0]}</b> ★ {_virgul(dusuk[1])}</span>' if dusuk else "")
+        + '</div>')
+    # 2) öne çıkan sorun
+    s_ = g.get("sorun")
+    if s_:
+        kartlar.append(
+            f'<div class="kart kotu"><span class="lbl">En sık şikayet</span><span class="ana">{html.escape(s_["tema"])}</span>'
+            f'<span class="alt"><b>{s_["adet"]}</b> yorumda geçiyor (okunanların %{s_["oran"]:.0f}). '
+            f'En çok: <b>{s_["urun"]}</b> ({s_["urun_adet"]} yorum)</span></div>')
+    else:
+        kartlar.append('<div class="kart iyi"><span class="lbl">En sık şikayet</span><span class="ana">Şikayet yok</span></div>')
+    # 3) dikkat gereken ürün
+    d = g.get("dikkat")
+    if d:
+        kartlar.append(
+            f'<div class="kart kotu"><span class="lbl">Dikkat gereken ürün</span><span class="ana">{d["link"]}</span>'
+            f'<span class="alt">Şikayet oranı <b>%{d["oran"]:.0f}</b> ({d["sik"]} / {d["n"]} yorum)'
+            + (f' · ★ {_virgul(d["puan"])}' if d.get("puan") else "")
+            + (f' · en çok: <b>{html.escape(d["tema"])}</b>' if d.get("tema") else "") + '</span></div>')
+    else:
+        kartlar.append('<div class="kart"><span class="lbl">Dikkat gereken ürün</span><span class="ana">–</span>'
+                       '<span class="alt">10+ yorumu olan ürün yok</span></div>')
+    # 4) son 30 gün
+    t = g.get("trend") or {}
+    if t.get("son_n") and t.get("son_puan") is not None:
+        fark = (t["son_puan"] - t["once_puan"]) if t.get("once_puan") else None
+        ok = ""
+        if fark is not None and abs(fark) >= 0.05:
+            ok = (f'<span class="ok {"up" if fark > 0 else "down"}">{"▲" if fark > 0 else "▼"} {_virgul(abs(fark))}</span>')
+        sik_fark = f' (önceki %{t["once_sik"]:.0f})' if t.get("once_sik") is not None else ""
+        sinif = " kotu" if fark is not None and fark <= -0.2 else (" iyi" if fark is not None and fark >= 0.1 else "")
+        kartlar.append(
+            f'<div class="kart{sinif}"><span class="lbl">Son 30 gün</span>'
+            f'<span class="ana">★ {_virgul(t["son_puan"])} {ok}</span>'
+            f'<span class="alt"><b>{t["son_n"]}</b> yeni yorum · şikayet <b>%{t["son_sik"]:.0f}</b>{sik_fark}'
+            + (f'<br>Önceki 90 günün ortalaması: ★ {_virgul(t["once_puan"])}' if t.get("once_puan") else "") + '</span></div>')
+    else:
+        kartlar.append('<div class="kart"><span class="lbl">Son 30 gün</span><span class="ana">Yeni yorum yok</span></div>')
+    st.markdown(_YORUM_CSS + '<div class="yt-gst">' + "".join(kartlar) + '</div>', unsafe_allow_html=True)
 
 
 def yorum_kpi(k: dict) -> None:
