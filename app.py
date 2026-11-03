@@ -645,7 +645,7 @@ def buybox_sayfasi():
 
 
 # ================= YORUM ANALİZİ =================
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=180)
 def load_yorumlar():
     """(ozet_df, yorum_df, zaman) — yorum_script.py'nin yazdığı iki sayfa."""
     client = get_gspread_client()
@@ -803,7 +803,13 @@ def yorum_sayfasi():
                                     label_visibility="collapsed") or "Trendyol"
     renk = tasarim.platform_temasi(platform)
 
-    c2, c3, c4, c5 = st.columns([1.6, 2.0, 1.8, 1])
+    c2, c3, c4, c_yenile, c5 = st.columns([1.6, 1.8, 1.6, 0.9, 1])
+    with c_yenile:
+        st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
+        if st.button("🔄 Verileri yenile", key="yr_yenile",
+                     help="Tarama yeni bittiyse 3 dakikalık önbelleği beklemeden güncel veriyi getirir"):
+            st.cache_data.clear()
+            st.rerun()
     with c2:
         satici = st.segmented_control("Satıcı", ["Tüm satıcılar", "Braun Shop"], default="Tüm satıcılar",
                                       key="yr_satici", help="Braun Shop: sadece Braun Shop'tan alan müşterilerin yorumları. "
