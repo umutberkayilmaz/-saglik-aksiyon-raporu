@@ -188,6 +188,12 @@ table.pt-tablo tbody tr:hover td { background:#FAFCFB; }
 .pt-pill.pt-nt { background:#F1F4F2; color:#3E4A44; }
 .pt-pill .bb { font-size:9px; line-height:13px; padding:0 3px; border-radius:4px; }
 .pt-pill .kupa { font-size:11px; }
+/* Sepette indirim: pill'in ustunde ustu cizili liste fiyati + "Sepette" etiketi */
+.pt-sepet { display:block; margin-bottom:2px; font-size:10.5px; line-height:1.2; color:#7B8A81; font-weight:600;
+            white-space:nowrap; font-variant-numeric:tabular-nums; }
+.pt-sepet s { color:#8F9C94; text-decoration-thickness:1.3px; }
+.pt-sepet b { display:inline-block; margin-left:4px; padding:0 5px; border-radius:4px; background:#E6F0FF; color:#1D4FA8;
+              font-size:9.5px; font-weight:800; letter-spacing:.02em; text-transform:uppercase; }
 .pt-yok { color:#A7B4AC; font-weight:600; cursor:help; }
 /* [eklendi] "veri alinamadi" ile "satista yok" ayrimi */
 .pt-veriyok { display:inline-block; min-width:22px; padding:1px 8px; border-radius:999px; background:#FFF1E6; color:#B4531A;
@@ -312,7 +318,7 @@ def hesapla(satirlar: list[dict], esik: float = 5) -> dict:
                 alarmlar.append({"urun": f'{r.get("marka","")} {r["urun"]}'.strip(), "kanal": k,
                                  "fiyat": fiyat, "tsf": r["tsf"], "d": d})
             hucreler.append({"durum": st_, "fiyat": fiyat, "d": d, "bb": bb,
-                             "link": r.get("linkler", {}).get(k)})
+                             "link": r.get("linkler", {}).get(k), "sepet": (r.get("sepet") or {}).get(k)})
         satir_ozet.append({**r, "hucreler": hucreler, "sapma": sapma, "bb_kayip": bb_kayip})
     alarmlar.sort(key=lambda a: a["d"])
     return {"satirlar": satir_ozet, "tot": tot, "kanal": ch, "alarmlar": alarmlar}
@@ -626,9 +632,20 @@ def _hucre_klasik(c: dict, en_ucuz: bool = False, eski: str = "", veri_yok: str 
         ipucu = "TSF ile aynı" if c["d"] <= 0.001 else f"TSF'nin %{_pct(c['d'])} üstünde"
     else:
         ipucu = f"TSF'nin %{_pct(c['d'])} altında"
+    sepet_ust = ""
+    sp = c.get("sepet") or {}
+    try:
+        liste = float(sp.get("liste") or 0)
+    except (TypeError, ValueError):
+        liste = 0
+    if liste and c.get("fiyat") and liste > c["fiyat"] + 0.009:
+        oran = (liste - c["fiyat"]) / liste * 100
+        ipucu = (f"Liste fiyatı {_fmt2(liste)} · Sepette {_fmt2(c['fiyat'])} (−%{_pct(oran)})"
+                 + (f" · {sp['not']}" if sp.get("not") else "") + " · " + ipucu)
+        sepet_ust = f'<span class="pt-sepet"><s>{_fmt2(liste)}</s><b>Sepette</b></span>'
     if eski:
         ipucu += f" · Eski veri: son başarılı tarama {eski}"
-    ic = (f'<span class="pt-pill pt-{c["durum"]}{" eski" if eski else ""}" title="{html.escape(ipucu, quote=True)}">'
+    ic = (f'{sepet_ust}<span class="pt-pill pt-{c["durum"]}{" eski" if eski else ""}" title="{html.escape(ipucu, quote=True)}">'
           f'{_fmt2(c["fiyat"])}{kupa}{bb}</span>')
     link = str(c.get("link") or "")
     if link.startswith("http"):
@@ -760,6 +777,8 @@ def fiyat_tablosu_klasik(h: dict, filtre: str = "Tümü", not_: str = "", esik: 
         '<div class="pt-foot-note"><span><span class="bb own">BB</span> Buybox bizde</span>'
         '<span><span class="bb lost" style="color:#5F6B64">BB</span> Buybox başka satıcıda</span>'
         "<span>🏆 Trendyol/Hepsiburada en düşüğü</span>"
+        '<span><span class="pt-sepet" style="display:inline"><s>3.999 ₺</s><b>Sepette</b></span> '
+        "sepette indirim: üstü çizili liste fiyatı, altında sepette ödenen fiyat</span>"
         '<span><b style="color:#A7B4AC">–</b> satışta yok · <span class="pt-veriyok">?</span> veri alınamadı · '
         '<span class="pt-pill pt-ok eski" style="padding:0 6px">kesikli</span> eski veri</span>'
         "<span>Kalın yazılı fiyat karşılaştırmada kullanılan fiyattır; TSF'ye göre farkı görmek için fiyatın üzerine gelin.</span>"

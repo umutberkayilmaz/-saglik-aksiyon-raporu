@@ -392,6 +392,7 @@ def veriyi_donustur(df, bb_df):
             "fiyatlar": {k: _sayi(r.get(f"{k}_fiyat")) for k in KANALLAR},
             "linkler": {k: (str(r.get(f"{k}_link", "") or "").strip() or None) for k in KANALLAR},
             "buybox": bb.get(kod, {}),
+            "sepet": _json_oku(r.get("Sepet İndirimi"), {}),
             "gorsel": str(r.get("Görsel", "") or ""),
             "tam_ad": ad,
             # eski düzen tablo sütunları
@@ -417,6 +418,9 @@ def _excel_verisi(satirlar):
             durum_, _ = tasarim.durum(fiyat, s["tsf"], ESIK_YUZDE)
             satir[k] = fiyat
             satir[f"{k} Durum"] = etiket[durum_]
+            if k != "Braunshop":
+                liste = (s.get("sepet") or {}).get(k, {}).get("liste")
+                satir[f"{k} Liste (sepet öncesi)"] = liste if liste else None
         for k in ("Trendyol", "Hepsiburada"):
             b = s["buybox"].get(k)
             satir[f"{k} Buybox"] = "Bizde" if b is True else ("Başka satıcıda" if b is False else "")
