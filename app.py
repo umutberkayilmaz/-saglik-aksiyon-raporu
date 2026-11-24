@@ -10,6 +10,14 @@ import gspread
 from google.oauth2.service_account import Credentials
 import importlib
 import tasarim
+import limitli
+try:
+    _limitli_surum = os.path.getmtime(limitli.__file__), os.path.getsize(limitli.__file__)
+    if getattr(limitli, "_yuklenen_surum", None) != _limitli_surum:
+        limitli = importlib.reload(limitli)
+        limitli._yuklenen_surum = _limitli_surum
+except Exception:
+    pass
 
 # Streamlit Cloud, GitHub'dan yeni sürüm gelince app.py'yi yeniden çalıştırır ama daha önce yüklenmiş
 # tasarim.py'yi hafızada eski haliyle tutabilir. Dosya değiştiyse yeniden yükle (yoksa yeni fonksiyonlar
@@ -1035,6 +1043,11 @@ for _kanal in KANALLAR:
 
 FIYAT_SEKMESI, BUYBOX_SEKMESI = ":material/bar_chart: Ürün Takibi", ":material/shopping_cart: BuyBox"
 YORUM_SEKMESI = ":material/reviews: Yorum Analizi"
+LIMITLI_SEKMESI = ":material/local_pharmacy: Limitli Adet"
+
+
+def _limitli_sheet():
+    return _tablo_ac(get_gspread_client())
 
 
 def _tarih_metni(guncelleme):
@@ -1052,6 +1065,8 @@ def _son_tarama(aktif):
         _, bb_zaman = load_buybox()
         bb_yas = tarama_yasi_dk(bb_zaman)
         return _tarih_metni(bb_zaman), (bb_yas is None or bb_yas <= BB_GECIKME_ESIGI_DK), "Son BuyBox taraması"
+    if aktif == LIMITLI_SEKMESI:
+        return limitli.son_tarama(_limitli_sheet)
     if aktif == YORUM_SEKMESI:
         _, _, y_zaman = load_yorumlar()
         y_yas = tarama_yasi_dk(y_zaman)
@@ -1059,11 +1074,13 @@ def _son_tarama(aktif):
     return _tarih_metni(_guncelleme), (_yas is None or _yas <= GECIKME_ESIGI_DK), "Son fiyat taraması"
 
 
-_aktif = tasarim.ust_baslik([FIYAT_SEKMESI, BUYBOX_SEKMESI, YORUM_SEKMESI], _son_tarama)
+_aktif = tasarim.ust_baslik([FIYAT_SEKMESI, BUYBOX_SEKMESI, YORUM_SEKMESI, LIMITLI_SEKMESI], _son_tarama)
 if _aktif == BUYBOX_SEKMESI:
     buybox_sayfasi()
 elif _aktif == YORUM_SEKMESI:
     yorum_sayfasi()
+elif _aktif == LIMITLI_SEKMESI:
+    limitli.sayfa(_limitli_sheet)
 else:
     fiyat_buybox_sayfasi(_df_fiyat, _yas)
 tasarim.alt_bant()

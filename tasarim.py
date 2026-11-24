@@ -464,7 +464,7 @@ def ust_baslik(sekmeler: list[str], son_tarama_fn) -> str:
     aktif = st.session_state["aktif_sekme"]
     tarih, canli, etiket = son_tarama_fn(aktif)
     with st.container(key="ust_baslik"):
-        sol, orta, sag = st.columns([1.75, 1.8, 1.05], gap="small")
+        sol, orta, sag = st.columns([2.45, 1.25, 1.05], gap="small")
         with sol:
             st.segmented_control("Sekme", sekmeler, key="sekme", on_change=_degisti, label_visibility="collapsed")
         with orta:
