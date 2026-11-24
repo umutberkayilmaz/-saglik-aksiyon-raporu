@@ -48,17 +48,17 @@ _CSS = """
 table.la-t { width:100%; border-collapse:separate !important; border-spacing:0; font-size:13px; color:#15261D; margin:0 !important; }
 table.la-t tr { border:0 !important; }
 table.la-t th { font-size:11px; font-weight:700; color:#6A7E72; letter-spacing:.05em; text-transform:uppercase; text-align:center !important;
-                padding:8px !important; border:0 !important; border-bottom:1px solid #E1EAE4 !important; background:#fff; }
+                padding:8px 4px !important; border:0 !important; border-bottom:1px solid #E1EAE4 !important; background:#fff; }
 table.la-t th.la-sol, table.la-t td.la-sol { text-align:left !important; }
-table.la-t td { padding:7px 8px !important; border:0 !important; border-bottom:1px solid #EEF3F0 !important; text-align:center; vertical-align:middle; }
-.la-urun { display:flex; align-items:center; gap:10px; min-width:240px; }
+table.la-t td { padding:6px 4px !important; border:0 !important; border-bottom:1px solid #EEF3F0 !important; text-align:center; vertical-align:middle; }
+.la-urun { display:flex; align-items:center; gap:8px; min-width:170px; max-width:230px; }
 .la-urun img { width:42px; height:42px; object-fit:contain; background:#fff; border:1px solid #E1EAE4; border-radius:8px; flex-shrink:0; }
 .la-urun .la-bos { width:42px; height:42px; border-radius:8px; background:#F1F5F3; flex-shrink:0; display:inline-block; }
-.la-urun b { display:block; font-size:13.5px; font-weight:650; line-height:1.3; }
+.la-urun b { display:block; font-size:12.5px; font-weight:650; line-height:1.3; }
 .la-urun small { color:#6A7E72; font-size:11.5px; }
 .la-fiyat { font-size:14.5px; font-weight:700; white-space:nowrap; font-variant-numeric:tabular-nums; }
 .la-alt { display:block; font-size:11px; color:#6A7E72; font-weight:500; white-space:nowrap; text-transform:none; letter-spacing:0; }
-.la-hucre { display:inline-flex; flex-direction:column; gap:2px; padding:7px 12px; border-radius:11px; border:1px solid; min-width:110px; }
+.la-hucre { display:inline-flex; flex-direction:column; gap:2px; padding:6px 10px; border-radius:11px; border:1px solid; min-width:96px; }
 .la-hucre .la-p { font-size:14.5px; font-weight:700; white-space:nowrap; font-variant-numeric:tabular-nums; }
 .la-hucre .la-d { font-size:11px; font-weight:700; }
 .la-hucre.la-ok   { background:#E6F5EC; border-color:#C3E5D0; color:#14693A; }
@@ -69,6 +69,16 @@ a.la-lnk { text-decoration:none !important; color:inherit !important; }
 a.la-lnk:hover .la-hucre { box-shadow:0 4px 12px rgba(20,70,45,.14); }
 .la-satici { display:flex; align-items:center; justify-content:center; gap:6px; font-size:11.5px; color:#3E4A44; }
 .la-satici img { height:16px; max-width:80px; object-fit:contain; }
+.la-mini { display:flex; flex-direction:column; align-items:center; gap:1px; padding:4px 8px; border-radius:9px; border:1px solid;
+           min-width:70px; margin:2px auto; }
+.la-mini .la-me { font-size:10px; font-weight:700; opacity:.75; text-transform:none; }
+.la-mini .la-p { font-size:13px; font-weight:700; white-space:nowrap; font-variant-numeric:tabular-nums; }
+.la-mini .la-d { font-size:10.5px; font-weight:700; }
+.la-mini.la-ok { background:#E6F5EC; border-color:#C3E5D0; color:#14693A; }
+.la-mini.la-warn { background:#FFF5DA; border-color:#F0D68E; color:#7F5300; }
+.la-mini.la-bad { background:#FDE6E2; border-color:#F3BDB4; color:#A3261A; }
+.la-mini.la-none { background:#F4F6F5; border-color:#DCE3DF; color:#3E4A44; }
+.la-yok { font-size:11.5px; color:#9AA8A0; white-space:nowrap; }
 .la-etiket { display:inline-block; padding:4px 10px; border-radius:999px; font-size:11.5px; font-weight:700; white-space:nowrap; }
 </style>
 """
@@ -79,7 +89,8 @@ _SHEET_FN = None   # app.py'den verilir: Google Sheet'i (Spreadsheet nesnesi) d�
 
 # Sağlık panelinin Sheet'indeki sayfa adları (sağlık panelinin kendi sayfalarıyla çakışmasın diye Limitli_ önekli)
 SAYFA = {"Akakce": "Limitli_Akakce", "Gecmis": "Limitli_Gecmis", "Durum": "Limitli_Durum",
-         "Limitli": "Limitli_Liste", "Eslestirme": "Limitli_Eslestirme"}
+         "Limitli": "Limitli_Liste", "Eslestirme": "Limitli_Eslestirme",
+         "Teklifler": "Limitli_Teklifler"}
 
 
 def _sheet():
@@ -302,9 +313,81 @@ def oneri_bul(ad, kod, akakce):
     return en, skor
 
 
+# ================= KANALLAR (Akakçe ürün sayfasındaki teklifler) =================
+# Pazaryerlerinde "resmi mağaza" sayılan satıcı adları (küçük harf, Türkçe karaktersiz aranır)
+RESMI_SATICILAR = ["p&g turkiye", "p&g", "procter"]
+
+# Her sütun: (başlık, [(alt etiket, platform anahtarı, tür)]). tür: "resmi" = P&G satıcısı,
+# "kendi" = platformun kendi sattığı teklif (satıcı boş ya da platform adıyla aynı)
+KANALLAR = [
+    ("Trendyol", [("P&G", "trendyol", "resmi"), ("Trendyol", "trendyol", "kendi")]),
+    ("Hepsiburada", [("P&G", "hepsiburada", "resmi"), ("Hepsiburada", "hepsiburada", "kendi")]),
+    ("Amazon", [("P&G", "amazon", "resmi"), ("Amazon", "amazon", "kendi")]),
+    ("Diğer pazaryeri P&G", [("P&G", "*", "resmi")]),
+    ("Vatan", [("", "vatan", "kendi")]),
+    ("MediaMarkt", [("", "mediamarkt", "kendi")]),
+    ("Teknosa", [("", "teknosa", "kendi")]),
+    ("Braunshop", [("", "braun", "kendi")]),
+]
+_ANA_PLATFORMLAR = {"trendyol", "hepsiburada", "amazon"}
+
+
+def _resmi_mi(satici):
+    s = sade(satici)
+    return any(sade(r) in s for r in RESMI_SATICILAR) if s else False
+
+
+def _kendi_mi(platform, satici, anahtar):
+    p, s = sade(platform), sade(satici)
+    if "pazaryeri" in p:                      # "MediaMarkt Pazaryeri" = MediaMarkt'taki başka satıcılar
+        return False
+    return not s or anahtar in s.replace(" ", "")
+
+
+def teklifler_oku():
+    """{akakce_kod: [{'platform','satici','fiyat','resmi'}]}"""
+    v = oku("Teklifler")
+    t = {}
+    for r in v[1:]:
+        if len(r) < 4 or not r[0]:
+            continue
+        f = sayi(r[3])
+        if f:
+            t.setdefault(str(r[0]).strip(), []).append(
+                {"platform": r[1], "satici": r[2], "fiyat": f, "resmi": r[4] if len(r) > 4 else ""})
+    return t
+
+
+def kanal_fiyatlari(teklifler):
+    """Bir ürünün teklif listesinden her kanal sütunu için [(etiket, fiyat, platform/satıcı)] üretir (en ucuz teklif)."""
+    sonuc = {}
+    for baslik, kalemler in KANALLAR:
+        hucre = []
+        for etiket, anahtar, tur in kalemler:
+            adaylar = []
+            for t in teklifler:
+                p = sade(t["platform"]).replace(" ", "")
+                if anahtar == "*":
+                    if any(a in p for a in _ANA_PLATFORMLAR):
+                        continue
+                elif anahtar not in p:
+                    continue
+                if tur == "resmi" and _resmi_mi(t["satici"]):
+                    adaylar.append(t)
+                elif tur == "kendi" and not _resmi_mi(t["satici"]) and _kendi_mi(t["platform"], t["satici"], anahtar):
+                    adaylar.append(t)
+            if adaylar:
+                en = min(adaylar, key=lambda x: x["fiyat"])
+                yer = en["platform"] + (f" / {en['satici']}" if en["satici"] else "")
+                hucre.append((etiket if anahtar != "*" else en["platform"], en["fiyat"], yer))
+        sonuc[baslik] = hucre
+    return sonuc
+
+
 # ================= KARŞILAŞTIRMA =================
-def karsilastir(df, kol, ref, akakce, esl, esik):
+def karsilastir(df, kol, ref, akakce, esl, esik, teklifler=None):
     ak = {r["Akakçe Kod"]: r for _, r in akakce.iterrows()}
+    teklifler = teklifler or {}
     satirlar = []
     for _, r in df.iterrows():
         ean = ean_norm(r[kol["ean"]])
@@ -335,17 +418,40 @@ def karsilastir(df, kol, ref, akakce, esl, esik):
             "satici_logo": a.get("Satıcı Logo", "") if a is not None else "",
             "satici_sayisi": a.get("Satıcı Sayısı", "") if a is not None else "",
             "fark": fark, "durum": durum,
+            "kanallar": kanal_fiyatlari(teklifler.get(kod, [])) if kod else {},
+            "teklif_var": bool(kod and teklifler.get(kod)),
+            "en_ucuz_yer": "",
         })
+        tk = teklifler.get(kod, []) if kod else []
+        if tk:
+            en = min(tk, key=lambda x: x["fiyat"])
+            satirlar[-1]["en_ucuz_yer"] = en["platform"] + (f" / {en['satici']}" if en["satici"] else "")
     return satirlar
+
+
+def renk_durumu(fiyat, bizim, esik):
+    if fiyat is None or not bizim:
+        return "none", None
+    f = (fiyat - bizim) / bizim * 100
+    return ("bad" if f < 0 else ("warn" if f < esik else "ok")), f
 
 
 DURUM_ADI = {"bad": "Akakçe bizden ucuz", "warn": "Marj dar", "ok": "Uygun",
              "fiyatyok": "Akakçe fiyatı yok", "eslesmedi": "Eşleştirilmedi"}
 
 
+def _mini(etiket, fiyat, bizim, esik, ipucu=""):
+    d, f = renk_durumu(fiyat, bizim, esik)
+    ust = f"<span class='la-me'>{e(etiket)}</span>" if etiket else ""
+    alt = f"<span class='la-d'>{yuzde(f)}</span>" if f is not None else ""
+    return (f"<span class='la-mini la-{d}' title='{e(ipucu)}'>{ust}<span class='la-p'>{tl(fiyat, kurus=False)}</span>"
+            f"{alt}</span>")
+
+
 def tablo_html(satirlar, ref, esik):
-    bas = (f"<tr><th class='la-sol'>Ürün</th><th>Kategori</th><th>Limitli Adet<span class='la-alt'>{e(ref)}</span></th>"
-           f"<th>Akakçe En Düşük<span class='la-alt'>fark: bizim fiyata göre</span></th><th>En ucuz satıcı</th><th>Durum</th></tr>")
+    kanal_bas = "".join(f"<th>{e(k)}</th>" for k, _ in KANALLAR)
+    bas = (f"<tr><th class='la-sol'>Ürün</th><th>Limitli Adet<span class='la-alt'>{e(ref)}</span></th>"
+           f"<th>Akakçe En Düşük</th>{kanal_bas}</tr>")
     g = []
     for s in satirlar:
         img = f"<img src='{e(s['gorsel'])}' loading='lazy'>" if s["gorsel"] else "<span class='la-bos'></span>"
@@ -355,25 +461,29 @@ def tablo_html(satirlar, ref, esik):
         bizim = f"<span class='la-fiyat'>{tl(s['bizim'])}</span>{diger}"
         d = s["durum"]
         if d in ("ok", "warn", "bad"):
+            yer = s["en_ucuz_yer"] or s["satici"]
             ic = (f"<span class='la-hucre la-{d}'><span class='la-p'>{tl(s['akakce'])}</span>"
-                  f"<span class='la-d'>{yuzde(s['fark'])}</span></span>")
+                  f"<span class='la-d'>{yuzde(s['fark'])}</span></span>"
+                  + (f"<span class='la-alt'>{e(yer)}</span>" if yer else ""))
         elif d == "fiyatyok":
             ic = "<span class='la-hucre la-none'><span class='la-p'>Fiyat yok</span></span>"
         else:
             ic = "<span class='la-hucre la-none'><span class='la-p'>Eşleştirilmedi</span></span>"
         if s["link"]:
             ic = f"<a class='la-lnk' href='{e(s['link'])}' target='_blank' title='{e(s['akakce_ad'])}'>{ic}</a>"
-        sat = ""
-        if s["satici"] or s["satici_logo"]:
-            logo = f"<img src='{e(s['satici_logo'])}'>" if s["satici_logo"] and not s["satici"] else ""
-            sat = f"<div class='la-satici'>{logo}{e(s['satici'])}</div>"
-        if s["satici_sayisi"]:
-            sat += f"<span class='la-alt'>{e(s['satici_sayisi'])} satıcı</span>"
-        renk = {"bad": "background:#FDE6E2;color:#A3261A", "warn": "background:#FFF5DA;color:#7F5300",
-                "ok": "background:#E6F5EC;color:#14693A"}.get(d, "background:#F1F5F3;color:#6A7E72")
-        etiket = f"<span class='la-etiket' style='{renk}'>{DURUM_ADI[d]}</span>"
-        g.append(f"<tr><td class='la-sol'>{urun}</td><td>{e(s['kategori'])}</td><td>{bizim}</td>"
-                 f"<td>{ic}</td><td>{sat or '—'}</td><td>{etiket}</td></tr>")
+        kanallar = []
+        for k, _ in KANALLAR:
+            hucre = s["kanallar"].get(k, [])
+            if hucre:
+                icerik = "".join(_mini(et, f, s["bizim"], esik, yer) for et, f, yer in hucre)
+                if s["link"]:
+                    icerik = f"<a class='la-lnk' href='{e(s['link'])}' target='_blank'>{icerik}</a>"
+            elif s["teklif_var"]:
+                icerik = "<span class='la-yok'>Satışta yok</span>"
+            else:
+                icerik = "<span class='la-yok'>—</span>"
+            kanallar.append(f"<td>{icerik}</td>")
+        g.append(f"<tr><td class='la-sol'>{urun}</td><td>{bizim}</td><td>{ic}</td>{''.join(kanallar)}</tr>")
     return f"<div class='la-kart'><table class='la-t'>{bas}{''.join(g)}</table></div>"
 
 
@@ -384,6 +494,10 @@ def excel_cikti(satirlar, ref):
         "Akakçe En Düşük": s["akakce"], "Fark %": round(s["fark"], 1) if s["fark"] is not None else None,
         "Durum": DURUM_ADI[s["durum"]], "En Ucuz Satıcı": s["satici"], "Satıcı Sayısı": s["satici_sayisi"],
         "Akakçe Ürün": s["akakce_ad"], "Akakçe Link": s["link"],
+        **{(f"{k} {et}".strip() if et else k): f for k, _ in KANALLAR for et, f, _y in s["kanallar"].get(k, [])
+           if k != "Diğer pazaryeri P&G"},
+        "Diğer pazaryeri P&G": " | ".join(f"{et}: {f:,.0f}".replace(",", ".")
+                                          for et, f, _y in s["kanallar"].get("Diğer pazaryeri P&G", [])),
     } for s in satirlar])
     buf = io.BytesIO()
     with pd.ExcelWriter(buf, engine="openpyxl") as w:
@@ -437,7 +551,8 @@ def karsilastirma_sayfasi():
     esik = c4.number_input("Marj dar eşiği (%)", 0, 100, VARSAYILAN_ESIK, 1,
                            help="Akakçe fiyatı bizim fiyatın bu yüzdeden daha az üstündeyse 'Marj dar' (sarı) sayılır.")
 
-    satirlar = karsilastir(df, kol, ref, akakce, esl, esik)
+    teklifler = teklifler_oku()
+    satirlar = karsilastir(df, kol, ref, akakce, esl, esik, teklifler)
     n = len(satirlar)
     say = {k: sum(1 for s in satirlar if s["durum"] == k) for k in DURUM_ADI}
     st.markdown(f"""<div class='la-kpis'>
@@ -460,8 +575,22 @@ def karsilastirma_sayfasi():
     st.download_button("Excel olarak indir", excel_cikti(goster, ref),
                        file_name=f"Limitli_Adet_vs_Akakce_{datetime.now(TR):%Y%m%d}.xlsx",
                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    st.caption("Kanal sütunları Akakçe ürün sayfasındaki tekliflerden gelir. P&G = pazaryerindeki P&G Türkiye mağazası; "
+               "Trendyol / Hepsiburada / Amazon = platformun kendi sattığı teklif; Vatan, MediaMarkt, Teknosa = kendi "
+               "sitesi; Braunshop = Braun resmi sitesi. Renkler Limitli Adet fiyatına göredir. Hücrenin üzerine gelince "
+               "satıcı görünür, tıklayınca Akakçe sayfası açılır.")
     if say["eslesmedi"]:
         st.caption(f"{say['eslesmedi']} ürün Akakçe ile eşleştirilmemiş. **Eşleştirme** sekmesinden eşleştirebilirsiniz.")
+    if teklifler:
+        with st.expander("Akakçe tekliflerinde görülen platform / satıcılar"):
+            sayac = {}
+            for liste in teklifler.values():
+                for t in liste:
+                    k = (t["platform"], t["satici"] or "(kendisi)")
+                    sayac[k] = sayac.get(k, 0) + 1
+            st.dataframe(pd.DataFrame([{"Platform": p, "Satıcı": sa, "Ürün sayısı": n}
+                                       for (p, sa), n in sorted(sayac.items())]),
+                         hide_index=True, use_container_width=True, height=320)
 
 
 def _hucre_degeri(v):
